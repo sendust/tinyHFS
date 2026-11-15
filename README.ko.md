@@ -28,9 +28,10 @@ chmod +x tinyhfs-linux-amd64
 ## 사용법
 
 ```
-tinyhfs[.exe] [root_path1 root_path2 "path N" ...] [port]
+tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
 ```
 
+- `-auth password`: 비밀번호를 요구합니다 ([인증](#인증) 참고). 지정하지 않으면 네트워크의 누구나 접속할 수 있습니다.
 - 기본 root: 실행파일이 있는 폴더. 기본 포트: `10002`
 - 여러 root 경로를 동시에 공유할 수 있고, 페이지 상단 버튼으로 전환합니다.
 - 포트 바인딩에 실패하면 포트를 1씩 올려 다시 시도합니다.
@@ -43,6 +44,7 @@ tinyhfs[.exe] [root_path1 root_path2 "path N" ...] [port]
 tinyhfs                          # 실행파일 폴더를 10002 포트로 공유
 tinyhfs /mnt /home/sendust 8080  # 두 폴더를 8080 포트로 공유
 tinyhfs.exe D:\share "E:\My Files"
+tinyhfs -auth MyPass123 /mnt     # 비밀번호 보호
 ```
 
 ## 기능 (웹 UI)
@@ -54,7 +56,25 @@ tinyhfs.exe D:\share "E:\My Files"
 - **이어서 받기**: HTTP Range / If-Range를 지원하므로 브라우저 다운로드 관리자의 "재개" 버튼, `curl -C - -O URL`, `wget -c URL`로 이어받을 수 있습니다.
 - 폴더 zip 압축 다운로드 (선택 항목 또는 현재 폴더). 압축 수준: store / **fast (기본값)** / normal / best
 - 폴더 만들기
+- **파일 검색**: 현재 폴더와 모든 하위 폴더에서 이름으로 검색합니다. 대소문자를 구분하지 않고, 공백으로 나눈 단어는 모두 포함돼야 합니다 (`report 2026`). 와일드카드 `*` `?`는 이름 전체와 비교합니다 (`*.mp4`). 검색 한 번에 최대 1000개 / 20초. 결과에서 바로 다운로드, zip 압축(폴더 구조 유지), 폴더 열기가 됩니다.
+- **비밀번호 인증** (`-auth`)
 - 전송 패널: 파일 크기, %, 전송 속도, 남은 시간, 취소 / 재개
+
+## 인증
+
+```
+tinyhfs -auth MyPass123 /mnt
+```
+
+- 브라우저에서는 로그인 페이지가 뜨고, 로그인하면 세션 쿠키가 7일간(서버 재시작 전까지) 유지됩니다. 오른쪽 위에 **Logout** 버튼이 생깁니다.
+- 명령줄 도구는 HTTP Basic 인증을 씁니다. 사용자 이름은 아무거나 됩니다.
+  ```
+  curl -u :MyPass123 -C - -O http://host:10002/dl/0/path/file
+  wget --user=x --password=MyPass123 -c http://host:10002/dl/0/path/file
+  ```
+- 한 IP에서 비밀번호를 5번 틀리면 그 IP는 5분간 차단됩니다. 로그인 결과는 로그에 남습니다.
+- 명령줄에 쓴 비밀번호는 같은 서버의 다른 사용자에게 보입니다 (`ps`). 이를 피하려면 `-auth` 대신 환경변수 `TINYHFS_AUTH`를 설정하세요.
+- 통신은 암호화되지 않은 HTTP입니다. 신뢰할 수 있는 네트워크나 VPN / HTTPS 리버스 프록시 뒤에서 사용하세요.
 
 ## 빌드
 
@@ -73,6 +93,7 @@ build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 |---|---|---|
 | GET | `/api/roots` | root 목록과 여유/전체 용량 |
 | GET | `/api/list?root=&path=` | 폴더 내용 |
+| GET | `/api/search?root=&path=&q=[&limit=]` | 하위 폴더 포함 이름 검색 |
 | POST | `/api/mkdir?root=&path=&name=` | 폴더 만들기 |
 | GET | `/api/upload/status?root=&path=&name=&size=` | 중단된 업로드의 이어 올릴 위치 |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | 업로드 조각 하나 전송 (요청 본문) |
@@ -80,9 +101,10 @@ build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 | GET | `/zip/<root>/<path>[?level=0-9&n=이름...]` | zip 다운로드 |
 | GET | `/api/progress?ids=` | 다운로드 진행 상태 |
 | POST | `/api/cancel?tid=` | 다운로드 취소 |
+| POST | `/api/login` (`{"password":"..."}`) / `/api/logout` | 로그인 / 로그아웃 (`-auth` 사용 시) |
 
 ## 참고
 
-- **인증 기능이 없습니다.** 포트에 접근할 수 있으면 누구나 탐색, 다운로드, 업로드할 수 있으니 신뢰할 수 있는 네트워크에서만 사용하세요.
+- `-auth` 없이 실행하면 **인증이 없습니다.** 포트에 접근할 수 있으면 누구나 탐색, 다운로드, 업로드할 수 있습니다.
 - 끌어서 다운로드는 Chromium 계열 브라우저(Chrome, Edge)에서만 됩니다.
 - zip은 요청할 때마다 새로 만들기 때문에 이어받기가 되지 않습니다.

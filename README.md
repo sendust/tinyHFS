@@ -28,9 +28,10 @@ chmod +x tinyhfs-linux-amd64
 ## Usage
 
 ```
-tinyhfs[.exe] [root_path1 root_path2 "path N" ...] [port]
+tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
 ```
 
+- `-auth password`: require a password (see [Authentication](#authentication)). Without it anyone on the network can access.
 - Default root: the executable's folder. Default port: `10002`.
 - Several root paths can be shared at once; switch between them with the buttons at the top of the page.
 - If the port is busy, port+1, +2 … is tried.
@@ -43,6 +44,7 @@ Examples:
 tinyhfs                          # share the executable's folder on port 10002
 tinyhfs /mnt /home/sendust 8080  # share two folders on port 8080
 tinyhfs.exe D:\share "E:\My Files"
+tinyhfs -auth MyPass123 /mnt     # password protected
 ```
 
 ## Features (web UI)
@@ -54,7 +56,25 @@ tinyhfs.exe D:\share "E:\My Files"
 - **Resumable download**: HTTP Range / If-Range supported → resume from the browser's download manager, or with `curl -C - -O URL` / `wget -c URL`
 - Folder zip download (selection or whole folder); compression: store / **fast (default)** / normal / best
 - Create folders
+- **File search**: searches the current folder and all subfolders by name. Case-insensitive; space separated words must all match (`report 2026`); wildcards `*` `?` match the whole name (`*.mp4`). Up to 1000 results / 20 s per search. Results can be downloaded, zipped (folder structure kept) or opened
+- **Password authentication** (`-auth`)
 - Transfer panel: size, %, speed, remaining time, cancel / resume
+
+## Authentication
+
+```
+tinyhfs -auth MyPass123 /mnt
+```
+
+- Browsers get a login page; after login a session cookie is kept for 7 days (until the server restarts). A **Logout** button appears at the top right.
+- Command line tools use HTTP Basic auth with any user name:
+  ```
+  curl -u :MyPass123 -C - -O http://host:10002/dl/0/path/file
+  wget --user=x --password=MyPass123 -c http://host:10002/dl/0/path/file
+  ```
+- 5 wrong passwords from one IP → that IP is blocked for 5 minutes. Login results are written to the log.
+- The password on the command line is visible to other users of the host (`ps`). To avoid that, set the environment variable `TINYHFS_AUTH` instead of `-auth`.
+- Traffic is plain HTTP (not encrypted). Use it on trusted networks or behind a VPN / HTTPS reverse proxy.
 
 ## Build
 
@@ -73,6 +93,7 @@ The page title is `tinyHFS by sendust <commit date/time>`. The date comes from t
 |---|---|---|
 | GET | `/api/roots` | Roots with free/total bytes |
 | GET | `/api/list?root=&path=` | Folder listing |
+| GET | `/api/search?root=&path=&q=[&limit=]` | Recursive name search |
 | POST | `/api/mkdir?root=&path=&name=` | Create folder |
 | GET | `/api/upload/status?root=&path=&name=&size=` | Resume offset of a partial upload |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | Upload one chunk (request body) |
@@ -80,9 +101,10 @@ The page title is `tinyHFS by sendust <commit date/time>`. The date comes from t
 | GET | `/zip/<root>/<path>[?level=0-9&n=name...]` | Zip download |
 | GET | `/api/progress?ids=` | Download progress |
 | POST | `/api/cancel?tid=` | Cancel a download |
+| POST | `/api/login` (`{"password":"..."}`) / `/api/logout` | Login / logout (when `-auth` is used) |
 
 ## Notes
 
-- There is **no authentication**: anyone who can reach the port can browse, download and upload. Use it on trusted networks only.
+- Without `-auth` there is **no authentication**: anyone who can reach the port can browse, download and upload.
 - Drag-out download works only in Chromium browsers (Chrome, Edge).
 - Zip downloads are generated on the fly, so they cannot be resumed.

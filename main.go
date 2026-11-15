@@ -1,7 +1,8 @@
 // tinyHFS - tiny HTTP file server by sendust
 //
-// usage: tinyhfs[.exe] [root_path1 root_path2 "path N" ...] [port]
-//   default root = directory of the executable, default port = 10002
+// usage: tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
+//
+//	default root = directory of the executable, default port = 10002
 package main
 
 import (
@@ -31,7 +32,7 @@ import (
 	"time"
 )
 
-//go:embed web/index.html
+//go:embed web/index.html web/login.html
 var webFS embed.FS
 
 // buildDate may be set with: -ldflags "-X 'main.buildDate=2026-01-01 12:00:00'"
@@ -41,6 +42,13 @@ const (
 	defaultPort = 10002
 	partSuffix  = ".tinyhfs-part" // partial upload files (hidden from listing)
 )
+
+type entry struct {
+	Name  string `json:"name"` // file name (search: path relative to the search folder)
+	Dir   bool   `json:"dir"`
+	Size  int64  `json:"size"`
+	MTime int64  `json:"mtime"`
+}
 
 type Root struct {
 	Name string
@@ -122,8 +130,9 @@ func versionString() string {
 func usage() {
 	fmt.Println(`tinyHFS by sendust - tiny HTTP file server
 
-usage: tinyhfs [root_path1 root_path2 "path N" ...] [port]
+usage: tinyhfs [-auth password] [root_path1 root_path2 "path N" ...] [port]
 
+  -auth pw   require this password (or set env TINYHFS_AUTH)
   root_path  folder(s) to share (default: folder of the executable)
   port       TCP port (default: 10002, increments by 1 if busy)`)
 }
@@ -415,7 +424,7 @@ func handleRoots(w http.ResponseWriter, r *http.Request) {
 		f, t := diskUsage(rt.Path)
 		out = append(out, rootInfo{i, rt.Name, rt.Path, f, t})
 	}
-	writeJSON(w, 200, map[string]any{"version": version, "roots": out})
+	writeJSON(w, 200, map[string]any{"version": version, "auth": authEnabled, "roots": out})
 }
 
 func handleList(w http.ResponseWriter, r *http.Request) {
@@ -429,12 +438,6 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		pathErr(w, err)
 		return
-	}
-	type entry struct {
-		Name  string `json:"name"`
-		Dir   bool   `json:"dir"`
-		Size  int64  `json:"size"`
-		MTime int64  `json:"mtime"`
 	}
 	list := make([]entry, 0, len(des))
 	for _, de := range des {
@@ -700,11 +703,11 @@ func handleZip(w http.ResponseWriter, r *http.Request) {
 	zipName := base + ".zip"
 	if names := q["n"]; len(names) > 0 {
 		for _, n := range names {
-			if !validName(n) {
+			if !validRelPath(n) {
 				jsonErr(w, http.StatusBadRequest, "invalid name: "+n)
 				return
 			}
-			p := filepath.Join(full, n)
+			p := filepath.Join(full, filepath.FromSlash(n))
 			if _, err := os.Stat(p); err != nil {
 				pathErr(w, err)
 				return
@@ -712,7 +715,7 @@ func handleZip(w http.ResponseWriter, r *http.Request) {
 			items = append(items, zipItem{p, n})
 		}
 		if len(names) == 1 {
-			zipName = names[0] + ".zip"
+			zipName = path.Base(names[0]) + ".zip"
 		}
 	} else {
 		items = []zipItem{{full, base}}
@@ -998,9 +1001,19 @@ func main() {
 	setupLog()
 	version = versionString()
 
+	args, pw, err := extractAuth(os.Args[1:])
+	if err != nil {
+		logger.Println("error:", err)
+		usage()
+		os.Exit(1)
+	}
+	if pw == "" {
+		pw = os.Getenv("TINYHFS_AUTH")
+	}
+	setPassword(pw)
+
 	var port int
-	var err error
-	roots, port, err = parseArgs(os.Args[1:])
+	roots, port, err = parseArgs(args)
 	if err != nil {
 		logger.Println("error:", err)
 		usage()
@@ -1012,6 +1025,10 @@ func main() {
 		logger.Fatal(err)
 	}
 	indexHTML = []byte(strings.ReplaceAll(string(b), "{{VERSION}}", html.EscapeString(version)))
+	if b, err = webFS.ReadFile("web/login.html"); err != nil {
+		logger.Fatal(err)
+	}
+	loginHTML = []byte(strings.ReplaceAll(string(b), "{{VERSION}}", html.EscapeString(version)))
 
 	ips := ipv4Addrs()
 	if len(ips) == 0 {
@@ -1031,15 +1048,20 @@ func main() {
 	mux.HandleFunc("/api/upload", handleUpload)
 	mux.HandleFunc("/api/progress", handleProgress)
 	mux.HandleFunc("/api/cancel", handleCancel)
+	mux.HandleFunc("/api/search", handleSearch)
+	mux.HandleFunc("/login", handleLoginPage)
+	mux.HandleFunc("/api/login", handleLogin)
+	mux.HandleFunc("/api/logout", handleLogout)
 	mux.HandleFunc("/dl/", handleDownload)
 	mux.HandleFunc("/zip/", handleZip)
 
 	srv := &http.Server{
-		Handler:           logMW(mux),
+		Handler:           logMW(authMW(mux)),
 		ReadHeaderTimeout: 30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 	go transferJanitor()
+	go authJanitor()
 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "\n==================================================\n")
@@ -1054,9 +1076,18 @@ func main() {
 	for _, n := range used {
 		fmt.Fprintf(&sb, "   http://%s:%d/    (%s)\n", n.ip, port, n.nic)
 	}
+	if authEnabled {
+		fmt.Fprintf(&sb, "\n Authentication: ON (password required)\n")
+	} else {
+		fmt.Fprintf(&sb, "\n Authentication: OFF (anyone on the network can access; use -auth <password>)\n")
+	}
+	cred, wcred := "", ""
+	if authEnabled {
+		cred, wcred = "-u :<password> ", "--user=x --password=<password> "
+	}
 	fmt.Fprintf(&sb, "\n Command line download (resumable):\n")
-	fmt.Fprintf(&sb, "   curl -C - -O http://<address>:%d/dl/0/<path/file>\n", port)
-	fmt.Fprintf(&sb, "   wget -c     http://<address>:%d/dl/0/<path/file>\n", port)
+	fmt.Fprintf(&sb, "   curl %s-C - -O http://<address>:%d/dl/0/<path/file>\n", cred, port)
+	fmt.Fprintf(&sb, "   wget %s-c http://<address>:%d/dl/0/<path/file>\n", wcred, port)
 	fmt.Fprintf(&sb, "\n Logs: %s\n Press Ctrl+C to stop.\n", mustAbs("log"))
 	fmt.Fprintf(&sb, "==================================================\n")
 	fmt.Print(sb.String())

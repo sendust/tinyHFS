@@ -60,6 +60,16 @@ tbody tr.sel td{background:var(--hl)}
 .xi .pb{display:flex;align-items:center;gap:6px}.xi .pb .bar{flex:1}
 .xi.ok .bar>i{background:var(--ok)}.xi.err .bar>i{background:var(--err)}
 @media (max-width:820px){.xi{grid-template-columns:20px 1fr 90px 64px}.xi .h1{display:none}.free{margin-left:0;width:100%}}
+.search{display:flex;gap:4px;align-items:center}
+.search input{font:inherit;font-size:13px;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);width:220px}
+.search input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
+#sinfo{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 8px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--hl);font-size:13px}
+#sinfo.show{display:flex}
+#sinfo .n{color:var(--muted)}
+#sinfo .w{color:var(--warn)}
+.name .dirpart{color:var(--muted)}
+#bOut{display:none}
+@media (max-width:820px){.search input{width:150px}}
 #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;z-index:30;max-width:90vw}
 </style>
 </head>
@@ -68,6 +78,7 @@ tbody tr.sel td{background:var(--hl)}
   <h1>tinyHFS <small>by sendust · {{VERSION}}</small></h1>
   <div class="roots" id="roots"></div>
   <div class="free" id="free"></div>
+  <button id="bOut" title="Log out">⎋ Logout</button>
 </header>
 <main>
   <div class="crumbs" id="crumbs"></div>
@@ -84,8 +95,10 @@ tbody tr.sel td{background:var(--hl)}
       <option value="9">Zip: best</option>
     </select>
     <span class="sp"></span>
+    <form class="search" id="fSearch"><input type="search" id="q" placeholder="Search in this folder…" title="Searches this folder and all subfolders.&#10;Words separated by space must all match.&#10;Wildcards: *.mp4  report_??.pdf"><button title="Search">🔍</button></form>
     <button id="bRef" title="Refresh">⟳</button>
   </div>
+  <div id="sinfo"></div>
   <input type="file" id="fUp" multiple hidden>
   <input type="file" id="fUpDir" webkitdirectory multiple hidden>
   <table>
@@ -111,7 +124,8 @@ tbody tr.sel td{background:var(--hl)}
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
-const S={roots:[],root:0,path:'/',entries:[],sort:{k:'name',asc:true},sel:new Set()};
+const S={roots:[],root:0,path:'/',entries:[],sort:{k:'name',asc:true},sel:new Set(),search:null};
+const base=n=>n.split('/').pop();
 const CHUNK=8*1024*1024, UP_CONC=2;
 
 // ---------- helpers
@@ -126,16 +140,18 @@ function dlURL(root,p){return `/dl/${root}/${encPath(p)}`}
 function zipURL(root,p,names){let u=`/zip/${root}/${encPath(p)}?level=${$('#zlv').value}`;for(const n of names||[])u+='&n='+encodeURIComponent(n);return u}
 function rid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-async function api(url,opt){const r=await fetch(url,opt);const t=await r.text();let j;try{j=JSON.parse(t)}catch{j={error:t}}if(!r.ok)throw new Error(j.error||r.statusText);return j}
+function toLogin(){location.href='/login'+location.hash}
+async function api(url,opt){const r=await fetch(url,opt);if(r.status===401){toLogin();throw new Error('login required')}const t=await r.text();let j;try{j=JSON.parse(t)}catch{j={error:t}}if(!r.ok)throw new Error(j.error||r.statusText);return j}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',3500)}
 
 // ---------- navigation
-function go(root,path){location.hash='#/'+root+'/'+encPath(path)}
+function go(root,path){const h='#/'+root+'/'+encPath(path);if(location.hash===h)load();else location.hash=h}
 function parseHash(){const parts=location.hash.replace(/^#\/?/,'').split('/');let root=parseInt(parts[0],10);if(isNaN(root)||root<0||root>=S.roots.length)root=0;let segs=[];try{segs=parts.slice(1).filter(Boolean).map(decodeURIComponent)}catch{}return {root,path:'/'+segs.join('/')}}
-async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;renderRoots()}
+async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';renderRoots()}
 async function load(){
   const {root,path}=parseHash();
   const changed=root!==S.root||path!==S.path;S.root=root;S.path=path;if(changed)S.sel.clear();
+  endSearch();
   renderRoots();renderCrumbs();
   try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}`);S.entries=d.entries;renderFree(d.free,d.total);
     const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);
@@ -155,23 +171,23 @@ function renderCrumbs(){const el=$('#crumbs');const r=S.roots[S.root];el.innerHT
   add(r?r.name:'root','/');let acc='';for(const s of S.path.split('/').filter(Boolean)){acc+='/'+s;const sp=document.createElement('span');sp.className='sep';sp.textContent='›';el.appendChild(sp);add(s,acc)}}
 function sorted(){const {k,asc}=S.sort;return [...S.entries].sort((a,b)=>{if(a.dir!==b.dir)return a.dir?-1:1;let v=k==='name'?a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}):(a[k]-b[k]);return asc?v:-v})}
 function renderList(){const tb=$('#list');tb.innerHTML='';
-  if(S.path!=='/'){const tr=document.createElement('tr');tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span><a>..</a></td>`;tr.querySelector('a').onclick=()=>go(S.root,S.path.replace(/\/[^/]*$/,'')||'/');tb.appendChild(tr)}
+  if(S.path!=='/'&&!S.search){const tr=document.createElement('tr');tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span><a>..</a></td>`;tr.querySelector('a').onclick=()=>go(S.root,S.path.replace(/\/[^/]*$/,'')||'/');tb.appendChild(tr)}
   const list=sorted();
-  if(!list.length){const tr=document.createElement('tr');tr.innerHTML='<td colspan="5" class="empty">Empty folder — drop files here to upload</td>';tb.appendChild(tr)}
+  if(!list.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="empty">${S.search?'No matches':'Empty folder — drop files here to upload'}</td>`;tb.appendChild(tr)}
   for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';
-    const p=joinP(S.path,e.name);
+    const p=joinP(S.path,e.name),bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);
     tr.innerHTML=`<td class="ck"><input type="checkbox" ${S.sel.has(e.name)?'checked':''}></td>
-      <td class="name"><span class="ico">${e.dir?'📁':'📄'}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${esc(e.name)}</a></td>
+      <td class="name"><span class="ico">${e.dir?'📁':'📄'}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
       <td class="num">${e.dir?'':fmtSize(e.size)}</td><td class="num">${fmtDate(e.mtime)}</td>
       <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
     tr.querySelector('input').onchange=ev=>{ev.target.checked?S.sel.add(e.name):S.sel.delete(e.name);tr.classList.toggle('sel',ev.target.checked);updSel()};
     const a=tr.querySelector('.name a');
-    if(!e.dir)a.onclick=ev=>{ev.preventDefault();downloadFile(S.root,p,e.name,e.size)};
-    tr.querySelector('.act button').onclick=()=>e.dir?downloadZip(S.root,p,[],e.name+'.zip'):downloadFile(S.root,p,e.name,e.size);
+    if(!e.dir)a.onclick=ev=>{ev.preventDefault();downloadFile(S.root,p,bn,e.size)};
+    tr.querySelector('.act button').onclick=()=>e.dir?downloadZip(S.root,p,[],bn+'.zip'):downloadFile(S.root,p,bn,e.size);
     // drag out => download (Chromium: DownloadURL)
     tr.draggable=true;
     tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):dlURL(S.root,p));
-      const fname=(e.dir?e.name+'.zip':e.name).replace(/:/g,'_');
+      const fname=(e.dir?bn+'.zip':bn).replace(/:/g,'_');
       ev.dataTransfer.setData('DownloadURL',`${e.dir?'application/zip':'application/octet-stream'}:${fname}:${url}`);
       ev.dataTransfer.setData('text/uri-list',url);ev.dataTransfer.setData('text/plain',url);ev.dataTransfer.effectAllowed='copy'});
     tr.addEventListener('dragend',()=>{dragOut=false});
@@ -220,7 +236,7 @@ $('#bClr').onclick=()=>{for(let i=X.length-1;i>=0;i--){const x=X[i];if(!x.active
 $('#bHide').onclick=()=>$('#xfer').classList.add('hide');
 setInterval(()=>{for(const x of X)if(x.active)x.render()},1000);
 
-let refT;function afterXfer(x){if(x.kind!=='up')return;clearTimeout(refT);refT=setTimeout(()=>{if(x.root===S.root)load();loadRoots().catch(()=>{})},400)}
+let refT;function afterXfer(x){if(x.kind!=='up')return;clearTimeout(refT);refT=setTimeout(()=>{if(x.root===S.root&&!S.search)load();loadRoots().catch(()=>{})},400)}
 
 // ---------- upload (chunked, resumable)
 const upQ=[];let upActive=0;
@@ -230,7 +246,7 @@ function enqueueUploads(items){if(!items.length)return;const batch={policy:null}
 function pumpUp(){while(upActive<UP_CONC&&upQ.length){const x=upQ.shift();upActive++;runUpload(x).catch(e=>x.fail(e.message)).finally(()=>{upActive--;pumpUp()})}}
 function xhrPut(x,url,blob,base){return new Promise((res,rej)=>{const r=new XMLHttpRequest();x.xhr=r;r.open('PUT',url);
   r.upload.onprogress=e=>x.update(base+e.loaded);
-  r.onload=()=>{let j={};try{j=JSON.parse(r.responseText)}catch{}if(r.status===200)return res(j);const er=new Error(j.error||('HTTP '+r.status));if(r.status===409&&j.offset!=null)er.offset=j.offset;er.status=r.status;rej(er)};
+  r.onload=()=>{if(r.status===401){toLogin();return rej(new Error('login required'))}let j={};try{j=JSON.parse(r.responseText)}catch{}if(r.status===200)return res(j);const er=new Error(j.error||('HTTP '+r.status));if(r.status===409&&j.offset!=null)er.offset=j.offset;er.status=r.status;rej(er)};
   r.onerror=()=>rej(new Error('network error'));r.onabort=()=>rej(new Error('aborted'));r.send(blob)})}
 async function runUpload(x){
   const size=x.file.size;
@@ -274,18 +290,40 @@ async function poll(){if(!pollSet.size){clearInterval(pollT);pollT=null;return}
 function downloadFile(root,p,name,size){nativeDownload(dlURL(root,p),name,'down',size)}
 function downloadZip(root,dir,names,fname){nativeDownload(zipURL(root,dir,names),fname,'zip',-1)}
 
+// ---------- search (this folder + subfolders)
+let searchAbort=null;
+function endSearch(){if(searchAbort){searchAbort.abort();searchAbort=null}S.search=null;$('#sinfo').classList.remove('show');$('#q').value=''}
+async function doSearch(){
+  const q=$('#q').value.trim()||(S.search&&S.search.q)||'';if(!q){clearSearch();return}
+  $('#q').value=q;
+  if(searchAbort)searchAbort.abort();const ac=new AbortController();searchAbort=ac;
+  const si=$('#sinfo');si.classList.add('show');si.innerHTML=`🔍 Searching “${esc(q)}” in ${esc(S.path)} …`;
+  try{const d=await api(`/api/search?root=${S.root}&path=${encodeURIComponent(S.path)}&q=${encodeURIComponent(q)}`,{signal:ac.signal});
+    if(ac!==searchAbort)return;searchAbort=null;
+    S.search={q};S.entries=d.entries;S.sel.clear();
+    si.innerHTML=`<span>🔍 <b>${d.entries.length.toLocaleString()}</b> result(s) for “${esc(q)}” in <b>${esc(S.path)}</b></span>
+      <span class="n">${d.scanned.toLocaleString()} items scanned · ${(d.elapsedMs/1000).toFixed(1)}s</span>
+      ${d.truncated?'<span class="w">result limit reached — refine the search</span>':''}${d.timedOut?'<span class="w">time limit reached — results may be incomplete</span>':''}
+      <button id="bSx">✕ Clear search</button>`;
+    $('#bSx').onclick=clearSearch;renderList()}
+  catch(e){if(e.name==='AbortError')return;si.innerHTML=`🔍 ${esc(e.message)} <button id="bSx">✕</button>`;$('#bSx').onclick=clearSearch}}
+function clearSearch(){endSearch();load()}
+$('#fSearch').onsubmit=ev=>{ev.preventDefault();$('#q').value.trim()?doSearch():clearSearch()};
+$('#q').addEventListener('keydown',ev=>{if(ev.key==='Escape')clearSearch()});
+
 // ---------- toolbar
 $('#bUp').onclick=()=>$('#fUp').click();
 $('#bUpDir').onclick=()=>$('#fUpDir').click();
 $('#fUp').onchange=ev=>{enqueueUploads([...ev.target.files].map(f=>({file:f,rel:f.name})));ev.target.value=''};
 $('#fUpDir').onchange=ev=>{enqueueUploads([...ev.target.files].map(f=>({file:f,rel:f.webkitRelativePath||f.name})));ev.target.value=''};
-$('#bRef').onclick=()=>{loadRoots().catch(()=>{});load()};
+$('#bRef').onclick=()=>{loadRoots().catch(()=>{});S.search?doSearch():load()};
+$('#bOut').onclick=async()=>{try{await fetch('/api/logout',{method:'POST'})}catch{}toLogin()};
 $('#bMk').onclick=async()=>{const n=prompt('New folder name:');if(!n)return;
   try{await api(`/api/mkdir?root=${S.root}&path=${encodeURIComponent(S.path)}&name=${encodeURIComponent(n.trim())}`,{method:'POST'});load()}catch(e){toast(e.message)}};
 $('#bDl').onclick=async()=>{const ents=S.entries.filter(e=>S.sel.has(e.name));
-  for(const e of ents){const p=joinP(S.path,e.name);if(e.dir)downloadZip(S.root,p,[],e.name+'.zip');else downloadFile(S.root,p,e.name,e.size);await sleep(400)}};
+  for(const e of ents){const p=joinP(S.path,e.name);if(e.dir)downloadZip(S.root,p,[],base(e.name)+'.zip');else downloadFile(S.root,p,base(e.name),e.size);await sleep(400)}};
 $('#bZip').onclick=()=>{const names=[...S.sel];const cur=S.path==='/'?(S.roots[S.root]||{}).name||'root':S.path.split('/').pop();
-  downloadZip(S.root,S.path,names,(names.length===1?names[0]:cur)+'.zip')};
+  downloadZip(S.root,S.path,names,(names.length===1?base(names[0]):cur)+'.zip')};
 
 // ---------- drag & drop upload
 let dragOut=false,dragCnt=0;
