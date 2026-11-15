@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>tinyHFS by sendust {{VERSION}}</title>
+<title>{{HOSTNAME}} · tinyHFS by sendust {{VERSION}}</title>
 <style>
 :root{--bg:#f5f6f8;--panel:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e2e5ea;--acc:#2563eb;--err:#dc2626}
 @media (prefers-color-scheme:dark){:root{--bg:#13161b;--panel:#1b1f26;--fg:#e5e7eb;--muted:#9aa3af;--line:#2b313a;--acc:#60a5fa;--err:#f87171}}
@@ -11,7 +11,10 @@
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;font:14px/1.45 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg)}
 form{width:100%;max-width:340px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px 24px}
 h1{font-size:20px;margin:0}
-.sub{color:var(--muted);font-size:12px;margin:2px 0 20px}
+.sub{color:var(--muted);font-size:12px;margin:2px 0 16px}
+.host{display:flex;align-items:center;gap:8px;margin:0 0 18px;padding:8px 11px;border:1px solid var(--line);border-radius:7px;background:var(--bg);font-size:13px}
+.host span{color:var(--muted)}
+.host b{font-weight:600;word-break:break-all}
 label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
 input{width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg)}
 input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:transparent}
@@ -24,6 +27,7 @@ button:disabled{opacity:.6;cursor:default}
 <form id="f">
   <h1>tinyHFS</h1>
   <div class="sub">by sendust · {{VERSION}}</div>
+  <div class="host" title="Server host name">🖥 <span>Host</span> <b>{{HOSTNAME}}</b></div>
   <label for="pw">Password</label>
   <input type="password" id="pw" autocomplete="current-password" autofocus required>
   <button id="b">Log in</button>

@@ -1028,7 +1028,14 @@ func main() {
 	if b, err = webFS.ReadFile("web/login.html"); err != nil {
 		logger.Fatal(err)
 	}
-	loginHTML = []byte(strings.ReplaceAll(string(b), "{{VERSION}}", html.EscapeString(version)))
+	host, _ := os.Hostname()
+	if host == "" {
+		host = "unknown host"
+	}
+	loginHTML = []byte(strings.NewReplacer(
+		"{{VERSION}}", html.EscapeString(version),
+		"{{HOSTNAME}}", html.EscapeString(host),
+	).Replace(string(b)))
 
 	ips := ipv4Addrs()
 	if len(ips) == 0 {
