@@ -32,7 +32,7 @@ import (
 	"time"
 )
 
-//go:embed web/index.html web/login.html
+//go:embed web/index.html web/login.html web/favicon.ico web/favicon-32x32.png web/apple-touch-icon.png
 var webFS embed.FS
 
 // buildDate may be set with: -ldflags "-X 'main.buildDate=2026-01-01 12:00:00'"
@@ -409,6 +409,29 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(indexHTML)
+}
+
+// static icons embedded from web/
+var iconFiles = map[string]string{
+	"/favicon.ico":          "image/x-icon",
+	"/favicon-32x32.png":    "image/png",
+	"/apple-touch-icon.png": "image/png",
+}
+
+func handleIcon(w http.ResponseWriter, r *http.Request) {
+	ct, ok := iconFiles[r.URL.Path]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := webFS.ReadFile("web" + r.URL.Path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(b)
 }
 
 func handleRoots(w http.ResponseWriter, r *http.Request) {
@@ -1048,6 +1071,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex)
+	for p := range iconFiles {
+		mux.HandleFunc(p, handleIcon)
+	}
 	mux.HandleFunc("/api/roots", handleRoots)
 	mux.HandleFunc("/api/list", handleList)
 	mux.HandleFunc("/api/mkdir", handleMkdir)

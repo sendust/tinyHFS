@@ -178,7 +178,7 @@ func authMW(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/login" || p == "/api/login" || p == "/api/logout" || p == "/favicon.ico" {
+		if p == "/login" || p == "/api/login" || p == "/api/logout" || iconFiles[p] != "" {
 			next.ServeHTTP(w, r)
 			return
 		}
