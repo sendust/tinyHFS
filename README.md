@@ -6,6 +6,25 @@ Tiny HTTP file server — a single executable for Windows and Linux with no depe
 
 ![tinyHFS web UI](tinyHFS_wwwUI.png)
 
+## Download
+
+Prebuilt binaries: **[Latest release](https://github.com/sendust/tinyHFS/releases/latest)**
+
+| Platform | File |
+|---|---|
+| Windows x64 | [tinyhfs-windows-amd64.exe](https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-windows-amd64.exe) |
+| Linux x64 | [tinyhfs-linux-amd64](https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-linux-amd64) |
+| Linux ARM64 | [tinyhfs-linux-arm64](https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-linux-arm64) |
+| Checksums | [SHA256SUMS.txt](https://github.com/sendust/tinyHFS/releases/latest/download/SHA256SUMS.txt) |
+
+On Linux:
+
+```
+wget https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-linux-amd64
+chmod +x tinyhfs-linux-amd64
+./tinyhfs-linux-amd64
+```
+
 ## Usage
 
 ```

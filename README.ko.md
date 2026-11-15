@@ -6,6 +6,25 @@
 
 ![tinyHFS 웹 UI](tinyHFS_wwwUI.png)
 
+## 다운로드
+
+빌드된 실행파일: **[최신 릴리스](https://github.com/sendust/tinyHFS/releases/latest)**
+
+| 플랫폼 | 파일 |
+|---|---|
+| Windows x64 | [tinyhfs-windows-amd64.exe](https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-windows-amd64.exe) |
+| Linux x64 | [tinyhfs-linux-amd64](https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-linux-amd64) |
+| Linux ARM64 | [tinyhfs-linux-arm64](https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-linux-arm64) |
+| 체크섬 | [SHA256SUMS.txt](https://github.com/sendust/tinyHFS/releases/latest/download/SHA256SUMS.txt) |
+
+Linux에서:
+
+```
+wget https://github.com/sendust/tinyHFS/releases/latest/download/tinyhfs-linux-amd64
+chmod +x tinyhfs-linux-amd64
+./tinyhfs-linux-amd64
+```
+
 ## 사용법
 
 ```
