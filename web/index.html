@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>tinyHFS by sendust {{VERSION}}</title>
+<style>
+:root{--bg:#f5f6f8;--panel:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e2e5ea;--acc:#2563eb;--hl:#e8effd;--ok:#16a34a;--err:#dc2626;--warn:#b45309}
+@media (prefers-color-scheme:dark){:root{--bg:#13161b;--panel:#1b1f26;--fg:#e5e7eb;--muted:#9aa3af;--line:#2b313a;--acc:#60a5fa;--hl:#1e2b40;--ok:#4ade80;--err:#f87171;--warn:#fbbf24}}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;font-weight:650;white-space:nowrap}
+header h1 small{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+.roots{display:flex;gap:6px;flex-wrap:wrap}
+.roots button.active{background:var(--acc);color:#fff;border-color:var(--acc)}
+.free{margin-left:auto;font-size:12px;color:var(--muted);min-width:220px}
+.free .bar{margin-top:3px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--acc);transition:width .25s}
+main{max-width:1200px;margin:0 auto;padding:10px 16px 280px}
+.crumbs{margin:6px 0;font-size:15px;word-break:break-all}
+.crumbs a{color:var(--acc);cursor:pointer;text-decoration:none}
+.crumbs a:hover{text-decoration:underline}
+.crumbs .sep{color:var(--muted);margin:0 5px}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.toolbar .sp{flex:1}
+button,select{font:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:default}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+th{font-weight:600;color:var(--muted);font-size:12px;cursor:pointer;user-select:none;background:var(--panel)}
+th.ck,td.ck{width:28px;padding-right:0;cursor:default}
+td.name{white-space:normal;word-break:break-all;width:100%}
+td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+tbody tr:hover td{background:var(--hl)}
+tbody tr.sel td{background:var(--hl)}
+.name a{color:var(--fg);text-decoration:none;cursor:pointer}
+.name a:hover{text-decoration:underline;color:var(--acc)}
+.ico{display:inline-block;width:22px}
+.act button{padding:2px 8px;font-size:12px}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.hint{color:var(--muted);font-size:12px;margin-top:8px}
+#drop{position:fixed;inset:0;background:rgba(37,99,235,.12);border:3px dashed var(--acc);display:none;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--acc);z-index:20;pointer-events:none}
+#drop.show{display:flex}
+#xfer{position:fixed;left:0;right:0;bottom:0;max-height:250px;overflow:auto;background:var(--panel);border-top:1px solid var(--line);font-size:12.5px;z-index:5}
+#xfer.hide{display:none}
+#xfer .head{position:sticky;top:0;z-index:1;background:var(--panel);display:flex;gap:8px;align-items:center;padding:6px 16px;border-bottom:1px solid var(--line);font-weight:600}
+#xfer .head .sp{flex:1}
+#xfer .head button{padding:2px 8px;font-size:12px;font-weight:400}
+.xi{display:grid;grid-template-columns:20px minmax(140px,1fr) 170px 170px 90px 70px 120px 64px;gap:10px;align-items:center;padding:5px 16px;border-bottom:1px solid var(--line)}
+.xi .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xi .n{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.xi .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xi .s.ok{color:var(--ok)}.xi .s.err{color:var(--err)}.xi .s.warn{color:var(--warn)}
+.xi button{padding:1px 6px;font-size:12px}
+.xi .pb{display:flex;align-items:center;gap:6px}.xi .pb .bar{flex:1}
+.xi.ok .bar>i{background:var(--ok)}.xi.err .bar>i{background:var(--err)}
+@media (max-width:820px){.xi{grid-template-columns:20px 1fr 90px 64px}.xi .h1{display:none}.free{margin-left:0;width:100%}}
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;z-index:30;max-width:90vw}
+</style>
+</head>
+<body>
+<header>
+  <h1>tinyHFS <small>by sendust · {{VERSION}}</small></h1>
+  <div class="roots" id="roots"></div>
+  <div class="free" id="free"></div>
+</header>
+<main>
+  <div class="crumbs" id="crumbs"></div>
+  <div class="toolbar">
+    <button class="pri" id="bUp" title="Upload files">⬆ Upload files</button>
+    <button id="bUpDir" title="Upload a whole folder">⬆ Upload folder</button>
+    <button id="bMk">＋ New folder</button>
+    <button id="bDl" disabled>⬇ Download</button>
+    <button id="bZip" title="Download selection (or current folder) as zip">🗜 Zip download</button>
+    <select id="zlv" title="Zip compression">
+      <option value="0">Zip: store (no compress)</option>
+      <option value="1" selected>Zip: fast (default)</option>
+      <option value="6">Zip: normal</option>
+      <option value="9">Zip: best</option>
+    </select>
+    <span class="sp"></span>
+    <button id="bRef" title="Refresh">⟳</button>
+  </div>
+  <input type="file" id="fUp" multiple hidden>
+  <input type="file" id="fUpDir" webkitdirectory multiple hidden>
+  <table>
+    <thead><tr>
+      <th class="ck"><input type="checkbox" id="ckAll"></th>
+      <th data-k="name">Name</th>
+      <th data-k="size" style="text-align:right">Size</th>
+      <th data-k="mtime">Modified</th>
+      <th></th>
+    </tr></thead>
+    <tbody id="list"></tbody>
+  </table>
+  <div class="hint">Drag &amp; drop files/folders onto the page to upload (interrupted uploads resume automatically when you upload the same file again).
+  Drag a file row to your desktop to download (Chrome/Edge). Interrupted downloads can be resumed from the browser's download manager.</div>
+</main>
+<div id="drop">Drop files or folders to upload</div>
+<div id="xfer" class="hide">
+  <div class="head"><span>Transfers</span><span id="xsum" class="n" style="font-weight:400"></span><span class="sp"></span>
+    <button id="bClr">Clear finished</button><button id="bHide">Hide</button></div>
+  <div id="xlist"></div>
+</div>
+<div id="toast"></div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const S={roots:[],root:0,path:'/',entries:[],sort:{k:'name',asc:true},sel:new Set()};
+const CHUNK=8*1024*1024, UP_CONC=2;
+
+// ---------- helpers
+function fmtSize(n){if(n==null||n<0)return '?';const u=['B','KB','MB','GB','TB','PB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (i?n.toFixed(n<10?2:n<100?1:0):n)+' '+u[i]}
+function p2(n){return String(n).padStart(2,'0')}
+function fmtDur(s){if(!isFinite(s)||s<0)return '--:--';s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?`${h}:${p2(m)}:${p2(x)}`:`${p2(m)}:${p2(x)}`}
+function fmtDate(t){const d=new Date(t*1000);return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function encPath(p){return p.split('/').filter(Boolean).map(encodeURIComponent).join('/')}
+function joinP(a,b){return (a.endsWith('/')?a:a+'/')+b}
+function dlURL(root,p){return `/dl/${root}/${encPath(p)}`}
+function zipURL(root,p,names){let u=`/zip/${root}/${encPath(p)}?level=${$('#zlv').value}`;for(const n of names||[])u+='&n='+encodeURIComponent(n);return u}
+function rid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function api(url,opt){const r=await fetch(url,opt);const t=await r.text();let j;try{j=JSON.parse(t)}catch{j={error:t}}if(!r.ok)throw new Error(j.error||r.statusText);return j}
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',3500)}
+
+// ---------- navigation
+function go(root,path){location.hash='#/'+root+'/'+encPath(path)}
+function parseHash(){const parts=location.hash.replace(/^#\/?/,'').split('/');let root=parseInt(parts[0],10);if(isNaN(root)||root<0||root>=S.roots.length)root=0;let segs=[];try{segs=parts.slice(1).filter(Boolean).map(decodeURIComponent)}catch{}return {root,path:'/'+segs.join('/')}}
+async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;renderRoots()}
+async function load(){
+  const {root,path}=parseHash();
+  const changed=root!==S.root||path!==S.path;S.root=root;S.path=path;if(changed)S.sel.clear();
+  renderRoots();renderCrumbs();
+  try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}`);S.entries=d.entries;renderFree(d.free,d.total);
+    const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);
+    renderList()}
+  catch(e){S.entries=[];renderList();toast(e.message)}
+}
+window.addEventListener('hashchange',load);
+
+// ---------- render
+function renderRoots(){const el=$('#roots');el.innerHTML='';
+  if(S.roots.length<2&&S.roots.length)el.innerHTML=`<span class="n" title="${esc(S.roots[0].path)}">📁 ${esc(S.roots[0].name)}</span>`;
+  else S.roots.forEach(r=>{const b=document.createElement('button');b.textContent='📁 '+r.name;b.title=`${r.path}\nfree ${fmtSize(r.free)} / ${fmtSize(r.total)}`;if(r.index===S.root)b.className='active';b.onclick=()=>go(r.index,'/');el.appendChild(b)})}
+function renderFree(free,total){const used=total?(total-free)/total*100:0;const r=S.roots[S.root];
+  $('#free').innerHTML=`<div title="${esc(r?r.path:'')}">Free <b>${fmtSize(free)}</b> of ${fmtSize(total)} &nbsp;(${r?esc(r.path):''})</div><div class="bar"><i style="width:${used.toFixed(1)}%"></i></div>`}
+function renderCrumbs(){const el=$('#crumbs');const r=S.roots[S.root];el.innerHTML='';
+  const add=(txt,p)=>{const a=document.createElement('a');a.textContent=txt;a.onclick=()=>go(S.root,p);el.appendChild(a)};
+  add(r?r.name:'root','/');let acc='';for(const s of S.path.split('/').filter(Boolean)){acc+='/'+s;const sp=document.createElement('span');sp.className='sep';sp.textContent='›';el.appendChild(sp);add(s,acc)}}
+function sorted(){const {k,asc}=S.sort;return [...S.entries].sort((a,b)=>{if(a.dir!==b.dir)return a.dir?-1:1;let v=k==='name'?a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}):(a[k]-b[k]);return asc?v:-v})}
+function renderList(){const tb=$('#list');tb.innerHTML='';
+  if(S.path!=='/'){const tr=document.createElement('tr');tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span><a>..</a></td>`;tr.querySelector('a').onclick=()=>go(S.root,S.path.replace(/\/[^/]*$/,'')||'/');tb.appendChild(tr)}
+  const list=sorted();
+  if(!list.length){const tr=document.createElement('tr');tr.innerHTML='<td colspan="5" class="empty">Empty folder — drop files here to upload</td>';tb.appendChild(tr)}
+  for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';
+    const p=joinP(S.path,e.name);
+    tr.innerHTML=`<td class="ck"><input type="checkbox" ${S.sel.has(e.name)?'checked':''}></td>
+      <td class="name"><span class="ico">${e.dir?'📁':'📄'}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${esc(e.name)}</a></td>
+      <td class="num">${e.dir?'':fmtSize(e.size)}</td><td class="num">${fmtDate(e.mtime)}</td>
+      <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
+    tr.querySelector('input').onchange=ev=>{ev.target.checked?S.sel.add(e.name):S.sel.delete(e.name);tr.classList.toggle('sel',ev.target.checked);updSel()};
+    const a=tr.querySelector('.name a');
+    if(!e.dir)a.onclick=ev=>{ev.preventDefault();downloadFile(S.root,p,e.name,e.size)};
+    tr.querySelector('.act button').onclick=()=>e.dir?downloadZip(S.root,p,[],e.name+'.zip'):downloadFile(S.root,p,e.name,e.size);
+    // drag out => download (Chromium: DownloadURL)
+    tr.draggable=true;
+    tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):dlURL(S.root,p));
+      const fname=(e.dir?e.name+'.zip':e.name).replace(/:/g,'_');
+      ev.dataTransfer.setData('DownloadURL',`${e.dir?'application/zip':'application/octet-stream'}:${fname}:${url}`);
+      ev.dataTransfer.setData('text/uri-list',url);ev.dataTransfer.setData('text/plain',url);ev.dataTransfer.effectAllowed='copy'});
+    tr.addEventListener('dragend',()=>{dragOut=false});
+    tb.appendChild(tr)}
+  document.querySelectorAll('th[data-k]').forEach(th=>{const k=th.dataset.k;th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(S.sort.k===k?(S.sort.asc?' ▲':' ▼'):'')});
+  updSel()}
+function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
+  $('#bZip').textContent=n?`🗜 Zip selected (${n})`:'🗜 Zip this folder';const all=$('#ckAll');all.checked=n&&n===S.entries.length;all.indeterminate=n>0&&n<S.entries.length}
+document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};renderList()});
+$('#ckAll').onchange=ev=>{S.sel=ev.target.checked?new Set(S.entries.map(e=>e.name)):new Set();renderList()};
+
+// ---------- transfers panel
+const X=[];let xseq=0;
+class Xfer{
+  constructor(kind,name,total){this.id=++xseq;this.kind=kind;this.name=name;this.total=total;this.done=0;this.base=0;this.samples=[];this.status='queued';this.cls='';this.note='';this.sent=0;
+    const el=document.createElement('div');el.className='xi';
+    el.innerHTML=`<span>${kind==='up'?'⬆':kind==='zip'?'🗜':'⬇'}</span><span class="nm" title="${esc(name)}">${esc(name)}</span>
+      <span class="pb h1"><span class="bar"><i></i></span><span class="n pc"></span></span><span class="n h1 sz"></span><span class="n h1 sp"></span><span class="n h1 eta"></span>
+      <span class="s"></span><span class="b"></span>`;
+    this.el=el;$('#xlist').prepend(el);X.push(this);$('#xfer').classList.remove('hide');this.render()}
+  start(off){this.base=off;this.done=off;this.samples=[{t:performance.now(),b:off}];this.t0=performance.now()}
+  update(done){this.done=done;const t=performance.now();this.samples.push({t,b:done});while(this.samples.length>2&&t-this.samples[0].t>4000)this.samples.shift();this.render()}
+  speed(){const s=this.samples;if(s.length<2)return 0;const a=s[0],b=s[s.length-1];const dt=(b.t-a.t)/1000;return dt>0.2?(b.b-a.b)/dt:0}
+  set(status,cls){this.status=status;this.cls=cls||'';this.render()}
+  finish(){this.done=this.total>=0?this.total:this.done;const el=(performance.now()-(this.t0||performance.now()))/1000;
+    const avg=el>0?(this.done-this.base)/el:0;this.set('done'+(el>0.5?` · avg ${fmtSize(avg)}/s`:''),'ok');this.active=false;afterXfer(this)}
+  fail(msg){this.set(msg,'err');this.active=false;afterXfer(this)}
+  render(){if(this._raf)return;this._raf=requestAnimationFrame(()=>{this._raf=0;const e=this.el,tot=this.total;
+    const pct=tot>0?Math.min(100,this.done/tot*100):(this.cls==='ok'?100:0);
+    e.querySelector('.bar>i').style.width=pct.toFixed(1)+'%';e.querySelector('.pc').textContent=tot>=0?pct.toFixed(1)+'%':'';
+    e.querySelector('.sz').textContent=`${fmtSize(this.done)} / ${tot>=0?fmtSize(tot):'?'}`+(this.kind==='zip'&&this.sent?` (zip ${fmtSize(this.sent)})`:'');
+    const sp=this.active?this.speed():0;e.querySelector('.sp').textContent=this.active?fmtSize(sp)+'/s':'';
+    e.querySelector('.eta').textContent=this.active&&tot>0&&sp>0?fmtDur((tot-this.done)/sp):(this.active?'--:--':'');
+    const s=e.querySelector('.s');s.textContent=this.status+(this.note?` · ${this.note}`:'');s.title=s.textContent;s.className='s '+this.cls;
+    e.className='xi '+this.cls;
+    const b=e.querySelector('.b');b.innerHTML='';const btn=(t,f,tip)=>{const x=document.createElement('button');x.textContent=t;x.title=tip||'';x.onclick=f;b.appendChild(x)};
+    if(this.active)btn('✕',()=>this.cancel(),'Cancel / pause');
+    else if(this.kind==='up'&&this.cls!=='ok'&&this.status!=='skipped')btn('▶',()=>this.resume(),'Resume upload');
+    updSum()})}
+  cancel(){if(this.kind==='up'){this.cancelled=true;this.xhr&&this.xhr.abort()}else{fetch('/api/cancel?tid='+this.tid,{method:'POST'});this.note='cancelled — resume from browser downloads'}}
+  resume(){if(this.kind==='up'){this.cancelled=false;this.note='';this.set('queued');upQ.push(this);pumpUp()}}
+}
+function updSum(){const act=X.filter(x=>x.active);let sp=0;for(const x of act)sp+=x.speed();
+  $('#xsum').textContent=act.length?`${act.length} active · ${fmtSize(sp)}/s`:`${X.length} item(s)`}
+$('#bClr').onclick=()=>{for(let i=X.length-1;i>=0;i--){const x=X[i];if(!x.active&&!upQ.includes(x)&&(x.cls==='ok'||x.status==='skipped')){x.el.remove();X.splice(i,1)}}if(!X.length)$('#xfer').classList.add('hide');updSum()};
+$('#bHide').onclick=()=>$('#xfer').classList.add('hide');
+setInterval(()=>{for(const x of X)if(x.active)x.render()},1000);
+
+let refT;function afterXfer(x){if(x.kind!=='up')return;clearTimeout(refT);refT=setTimeout(()=>{if(x.root===S.root)load();loadRoots().catch(()=>{})},400)}
+
+// ---------- upload (chunked, resumable)
+const upQ=[];let upActive=0;
+function enqueueUploads(items){if(!items.length)return;const batch={policy:null};
+  for(const it of items){const x=new Xfer('up',it.rel,it.file.size);x.file=it.file;x.rel=it.rel;x.root=S.root;x.dir=S.path;x.batch=batch;upQ.push(x)}
+  pumpUp()}
+function pumpUp(){while(upActive<UP_CONC&&upQ.length){const x=upQ.shift();upActive++;runUpload(x).catch(e=>x.fail(e.message)).finally(()=>{upActive--;pumpUp()})}}
+function xhrPut(x,url,blob,base){return new Promise((res,rej)=>{const r=new XMLHttpRequest();x.xhr=r;r.open('PUT',url);
+  r.upload.onprogress=e=>x.update(base+e.loaded);
+  r.onload=()=>{let j={};try{j=JSON.parse(r.responseText)}catch{}if(r.status===200)return res(j);const er=new Error(j.error||('HTTP '+r.status));if(r.status===409&&j.offset!=null)er.offset=j.offset;er.status=r.status;rej(er)};
+  r.onerror=()=>rej(new Error('network error'));r.onabort=()=>rej(new Error('aborted'));r.send(blob)})}
+async function runUpload(x){
+  const size=x.file.size;
+  const q=`root=${x.root}&path=${encodeURIComponent(x.dir)}&name=${encodeURIComponent(x.rel)}&size=${size}`;
+  x.set('checking');
+  let s;try{s=await api('/api/upload/status?'+q)}catch(e){return x.fail(e.message)}
+  if(s.exists&&s.offset===0&&!x.overwriteOK){
+    if(x.batch.policy===null)x.batch.policy=confirm(`"${x.rel}" already exists on the server.\n\nOK = overwrite existing files (this batch)\nCancel = skip existing files`);
+    if(!x.batch.policy){x.set('skipped','warn');return}
+    x.overwriteOK=true}
+  if(s.free>0&&size-s.offset>s.free)return x.fail('not enough free space on server');
+  let off=s.offset;x.start(off);x.active=true;x.note=off>0?`resumed @ ${fmtSize(off)}`:'';x.set('uploading');
+  let retries=0;
+  do{
+    if(x.cancelled){x.active=false;return x.set('paused','warn')}
+    const end=Math.min(off+CHUNK,size);
+    try{const r=await xhrPut(x,`/api/upload?${q}&offset=${off}&mtime=${x.file.lastModified||0}`,x.file.slice(off,end),off);off=r.offset;retries=0;x.update(off);if(x.status!=='uploading')x.set('uploading')}
+    catch(e){
+      if(x.cancelled){x.active=false;return x.set('paused','warn')}
+      if(e.offset!=null){off=e.offset;x.start(off);continue}
+      if(e.status&&e.status>=400&&e.status<500&&e.status!==423&&e.status!==408){x.active=false;return x.fail(e.message)}
+      if(++retries>8){x.active=false;return x.fail(e.message+' — press ▶ to resume')}
+      x.set(`retry ${retries} (${e.message})`,'warn');await sleep(Math.min(1000*retries,8000));
+      try{const s2=await api('/api/upload/status?'+q);off=s2.offset;x.start(off)}catch{}
+    }
+  }while(off<size);
+  x.finish()}
+
+// ---------- download (browser native, progress polled from server)
+const pollSet=new Set();let pollT=null;
+function nativeDownload(url,fname,kind,total){const x=new Xfer(kind,fname,total);x.tid=rid();x.root=S.root;x.set('starting');x.active=true;x.start(0);
+  const a=document.createElement('a');a.href=url+(url.includes('?')?'&':'?')+'tid='+x.tid;a.download=fname;a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
+  x.created=Date.now();pollSet.add(x);if(!pollT)pollT=setInterval(poll,700)}
+async function poll(){if(!pollSet.size){clearInterval(pollT);pollT=null;return}
+  const list=[...pollSet];let d;try{d=await api('/api/progress?ids='+list.map(x=>x.tid).join(','))}catch{return}
+  for(const x of list){const p=d[x.tid];
+    if(!p){if(Date.now()-x.created>30000){pollSet.delete(x);x.active=false;x.set('handed to browser (no progress info)','warn')}continue}
+    if(p.total>=0)x.total=p.total;x.sent=p.sent;x.update(p.done);
+    if(p.finished){pollSet.delete(x);x.active=false;if(p.error)x.fail(p.error+(p.error!=='interrupted'&&p.error.indexOf('cancel')<0?'':' — resume in browser downloads'));else x.finish()}
+    else if(x.status!=='downloading'&&x.status!=='zipping')x.set(x.kind==='zip'?'zipping':'downloading')}}
+function downloadFile(root,p,name,size){nativeDownload(dlURL(root,p),name,'down',size)}
+function downloadZip(root,dir,names,fname){nativeDownload(zipURL(root,dir,names),fname,'zip',-1)}
+
+// ---------- toolbar
+$('#bUp').onclick=()=>$('#fUp').click();
+$('#bUpDir').onclick=()=>$('#fUpDir').click();
+$('#fUp').onchange=ev=>{enqueueUploads([...ev.target.files].map(f=>({file:f,rel:f.name})));ev.target.value=''};
+$('#fUpDir').onchange=ev=>{enqueueUploads([...ev.target.files].map(f=>({file:f,rel:f.webkitRelativePath||f.name})));ev.target.value=''};
+$('#bRef').onclick=()=>{loadRoots().catch(()=>{});load()};
+$('#bMk').onclick=async()=>{const n=prompt('New folder name:');if(!n)return;
+  try{await api(`/api/mkdir?root=${S.root}&path=${encodeURIComponent(S.path)}&name=${encodeURIComponent(n.trim())}`,{method:'POST'});load()}catch(e){toast(e.message)}};
+$('#bDl').onclick=async()=>{const ents=S.entries.filter(e=>S.sel.has(e.name));
+  for(const e of ents){const p=joinP(S.path,e.name);if(e.dir)downloadZip(S.root,p,[],e.name+'.zip');else downloadFile(S.root,p,e.name,e.size);await sleep(400)}};
+$('#bZip').onclick=()=>{const names=[...S.sel];const cur=S.path==='/'?(S.roots[S.root]||{}).name||'root':S.path.split('/').pop();
+  downloadZip(S.root,S.path,names,(names.length===1?names[0]:cur)+'.zip')};
+
+// ---------- drag & drop upload
+let dragOut=false,dragCnt=0;
+const isFileDrag=ev=>!dragOut&&ev.dataTransfer&&[...ev.dataTransfer.types].includes('Files');
+document.addEventListener('dragenter',ev=>{if(!isFileDrag(ev))return;ev.preventDefault();dragCnt++;$('#drop').classList.add('show')});
+document.addEventListener('dragleave',ev=>{if(!isFileDrag(ev))return;if(--dragCnt<=0){dragCnt=0;$('#drop').classList.remove('show')}});
+document.addEventListener('dragover',ev=>{if(!isFileDrag(ev))return;ev.preventDefault();ev.dataTransfer.dropEffect='copy'});
+document.addEventListener('drop',async ev=>{if(!isFileDrag(ev))return;ev.preventDefault();dragCnt=0;$('#drop').classList.remove('show');
+  try{enqueueUploads(await collectDrop(ev.dataTransfer))}catch(e){toast('drop failed: '+e.message)}});
+async function collectDrop(dt){
+  const entries=[...dt.items].filter(i=>i.kind==='file').map(i=>i.webkitGetAsEntry?i.webkitGetAsEntry():null);
+  const files=[...dt.files];
+  if(!entries.some(Boolean))return files.map(f=>({file:f,rel:f.name}));
+  const out=[];
+  async function walk(ent,prefix){
+    if(ent.isFile){const f=await new Promise((r,j)=>ent.file(r,j));out.push({file:f,rel:prefix+f.name})}
+    else if(ent.isDirectory){const rd=ent.createReader();let b;do{b=await new Promise((r,j)=>rd.readEntries(r,j));for(const e of b)await walk(e,prefix+ent.name+'/')}while(b.length)}}
+  for(const e of entries)if(e)await walk(e,'');
+  return out}
+
+window.addEventListener('beforeunload',ev=>{if(X.some(x=>x.active&&x.kind==='up')){ev.preventDefault();ev.returnValue=''}});
+
+// ---------- start
+loadRoots().then(load).catch(e=>toast(e.message));
+</script>
+</body>
+</html>
