@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<title>WebDAV · {{HOSTNAME}} · tinyHFS</title>
+<style>
+:root{--bg:#f5f6f8;--panel:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e2e5ea;--acc:#2563eb;--hl:#e8effd;--warn:#b45309;--warnbg:#fff7e6;--code:#f1f3f6}
+@media (prefers-color-scheme:dark){:root{--bg:#13161b;--panel:#1b1f26;--fg:#e5e7eb;--muted:#9aa3af;--line:#2b313a;--acc:#60a5fa;--hl:#1e2b40;--warn:#fbbf24;--warnbg:#2a2213;--code:#11141a}}
+*{box-sizing:border-box}
+body{margin:0;font:14.5px/1.6 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;font-weight:650}
+header h1 small{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+header .sp{flex:1}
+header a,header button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);text-decoration:none;cursor:pointer}
+header button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+main{max-width:900px;margin:0 auto;padding:16px 16px 60px}
+h2{font-size:18px;margin:30px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3{font-size:15px;margin:20px 0 6px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;align-items:center}
+.kv b{font-weight:600;color:var(--muted);font-size:13px}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,"D2Coding",monospace;font-size:13px;background:var(--code);padding:1px 5px;border-radius:4px;word-break:break-all}
+.pre{position:relative;margin:8px 0}
+.pre pre{margin:0;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow-x:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,"D2Coding",monospace;white-space:pre}
+.pre button{position:absolute;top:6px;right:6px;font-size:12px;padding:2px 8px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--fg);cursor:pointer}
+.warn{background:var(--warnbg);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:8px;padding:10px 14px;margin:10px 0}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;background:var(--hl);color:var(--acc)}
+.badge.off{background:var(--code);color:var(--muted)}
+ol,ul{padding-left:22px;margin:6px 0}
+li{margin:3px 0}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--code);font-weight:600}
+.muted{color:var(--muted)}
+[data-l]{display:none}
+html[lang=en] [data-l=en],html[lang=ko] [data-l=ko]{display:revert}
+@media (max-width:600px){.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>tinyHFS WebDAV <small>{{HOSTNAME}} · [{{VERSION}}]</small></h1>
+  <span class="sp"></span>
+  <button id="lEn">English</button><button id="lKo">한국어</button>
+  <a href="/">← <span data-l="en">File browser</span><span data-l="ko">파일 브라우저</span></a>
+</header>
+<main>
+
+<!-- ============================================================ summary -->
+<div class="card kv">
+  <b>WebDAV URL</b><span><code class="u-dav"></code></span>
+  <b data-l="en">Windows path</b><b data-l="ko">Windows 경로</b><span><code class="u-unc"></code></span>
+  <b data-l="en">Shared folders</b><b data-l="ko">공유 폴더</b><span id="shares"></span>
+  <b data-l="en">Authentication</b><b data-l="ko">인증</b>
+  <span id="authInfo"></span>
+</div>
+
+<p data-l="en">This page is shown when the WebDAV address is opened in a web browser. To use WebDAV, connect with a WebDAV client (Windows Explorer, macOS Finder, Linux file managers…) as explained below. Each shared folder appears as a sub folder of <code>/webdav/</code>.</p>
+<p data-l="ko">WebDAV 주소를 웹 브라우저로 열면 이 안내 페이지가 표시됩니다. 실제 사용은 아래 설명처럼 WebDAV 클라이언트(Windows 탐색기, macOS Finder, Linux 파일 관리자 등)로 연결하세요. 공유 폴더는 각각 <code>/webdav/</code> 아래의 하위 폴더로 보입니다.</p>
+
+<!-- ============================================================ windows -->
+<h2>🪟 Windows</h2>
+
+<h3 data-l="en">Map a network drive (Explorer)</h3>
+<h3 data-l="ko">네트워크 드라이브 연결 (탐색기)</h3>
+<ol data-l="en">
+  <li>Open Explorer → right-click <b>This PC</b> → <b>Map network drive…</b></li>
+  <li>Choose a drive letter, and in <b>Folder</b> enter: <code class="u-dav"></code></li>
+  <li>Check <b>Reconnect at sign-in</b> to keep it.</li>
+  <li class="authOnly">Check <b>Connect using different credentials</b>, then enter any user name and the server password.</li>
+  <li>Click <b>Finish</b>.</li>
+</ol>
+<ol data-l="ko">
+  <li>탐색기 → <b>내 PC</b> 우클릭 → <b>네트워크 드라이브 연결…</b></li>
+  <li>드라이브 문자를 고르고 <b>폴더</b>에 입력: <code class="u-dav"></code></li>
+  <li>계속 쓰려면 <b>로그인할 때 다시 연결</b>을 체크합니다.</li>
+  <li class="authOnly"><b>다른 자격 증명을 사용하여 연결</b>을 체크하고, 사용자 이름은 아무거나, 비밀번호는 서버 비밀번호를 입력합니다.</li>
+  <li><b>마침</b>을 누릅니다.</li>
+</ol>
+
+<h3 data-l="en">Command line</h3>
+<h3 data-l="ko">명령줄</h3>
+<div class="pre"><pre id="netuse"></pre></div>
+<p class="muted" data-l="en">Disconnect: <code>net use Z: /delete</code>. You can also type <code class="u-unc"></code> in the Explorer address bar.</p>
+<p class="muted" data-l="ko">연결 해제: <code>net use Z: /delete</code>. 탐색기 주소창에 <code class="u-unc"></code>를 입력해도 열립니다.</p>
+
+<h3 data-l="en">Limitations of the built-in Windows WebDAV client and workarounds</h3>
+<h3 data-l="ko">Windows 내장 WebDAV 클라이언트의 제약과 우회 방법</h3>
+
+<table data-l="en">
+<tr><th>Limitation</th><th>Symptom</th><th>Workaround</th></tr>
+<tr><td><b>WebClient service</b> must be running</td><td>"The network path was not found" / drive cannot be mapped</td><td>Start the service and set it to automatic (admin): <code>sc config WebClient start= auto</code>, <code>net start WebClient</code>. Windows Server: install the feature first: <code>Install-WindowsFeature WebDAV-Redirector</code> (PowerShell, reboot).</td></tr>
+<tr class="authOnlyRow"><td><b>Password over plain HTTP is refused</b> (Basic auth allowed only over HTTPS by default)</td><td>Password prompt keeps coming back / "Access denied" although the password is right</td><td>Registry <code>BasicAuthLevel = 2</code> (see script below), restart WebClient. ⚠ The password is then sent unencrypted — use on a trusted network or VPN only.</td></tr>
+<tr><td><b>File size limit 50 MB</b> (<code>FileSizeLimitInBytes</code>)</td><td>Copying a larger file fails: "file size exceeds the limit allowed"</td><td>Raise to the maximum <code>0xFFFFFFFF</code> (≈ 4 GB). Files <b>over 4 GB cannot be handled</b> by the Windows client at all — use the <a href="/">web file browser</a> (resumable) or a third-party client (below).</td></tr>
+<tr><td><b>Folder listing size limit</b> (<code>FileAttributesLimitInBytes</code>, 1 MB)</td><td>Folders with thousands of files show an error or appear empty</td><td>Raise to <code>50000000</code> (see script).</td></tr>
+<tr><td><b>Slow</b> (several seconds per operation)</td><td>Opening folders / connecting takes long</td><td>Internet Options → Connections → LAN settings → uncheck <b>Automatically detect settings</b>. Use the IP address instead of the host name.</td></tr>
+<tr><td>Copy is done in one piece, <b>no resume</b></td><td>A broken copy of a large file must restart from zero</td><td>Use the web file browser (resumable upload/download) for large files.</td></tr>
+<tr><td>Free space not reported</td><td>Drive shows a wrong / unknown size</td><td>Cosmetic. The real free space is shown in the web file browser.</td></tr>
+</table>
+<table data-l="ko">
+<tr><th>제약</th><th>증상</th><th>우회 방법</th></tr>
+<tr><td><b>WebClient 서비스</b>가 실행 중이어야 함</td><td>"네트워크 경로를 찾을 수 없습니다" / 드라이브 연결 실패</td><td>관리자 권한으로 서비스 시작 및 자동 시작 설정: <code>sc config WebClient start= auto</code>, <code>net start WebClient</code>. Windows Server는 먼저 기능 설치: <code>Install-WindowsFeature WebDAV-Redirector</code> (PowerShell, 재부팅).</td></tr>
+<tr class="authOnlyRow"><td><b>HTTP에서는 비밀번호 전송을 거부</b> (기본값: Basic 인증은 HTTPS에서만 허용)</td><td>비밀번호가 맞는데도 입력 창이 계속 뜨거나 "액세스 거부"</td><td>레지스트리 <code>BasicAuthLevel = 2</code> 설정 (아래 스크립트) 후 WebClient 재시작. ⚠ 비밀번호가 암호화 없이 전송되므로 신뢰할 수 있는 네트워크나 VPN에서만 사용하세요.</td></tr>
+<tr><td><b>파일 크기 50MB 제한</b> (<code>FileSizeLimitInBytes</code>)</td><td>큰 파일 복사 시 "파일 크기가 허용 한도를 초과합니다" 오류</td><td>최대값 <code>0xFFFFFFFF</code>(약 4GB)로 변경. <b>4GB를 넘는 파일은</b> Windows 클라이언트로는 <b>처리할 수 없습니다</b> → <a href="/">웹 파일 브라우저</a>(이어받기 지원)나 아래의 다른 클라이언트를 사용하세요.</td></tr>
+<tr><td><b>폴더 목록 크기 제한</b> (<code>FileAttributesLimitInBytes</code>, 1MB)</td><td>파일이 수천 개인 폴더가 오류 또는 빈 폴더로 보임</td><td><code>50000000</code>으로 변경 (아래 스크립트).</td></tr>
+<tr><td><b>느림</b> (작업마다 몇 초씩 지연)</td><td>연결, 폴더 열기가 오래 걸림</td><td>인터넷 옵션 → 연결 → LAN 설정 → <b>자동으로 설정 검색</b> 체크 해제. 호스트 이름 대신 IP 주소로 연결.</td></tr>
+<tr><td>복사가 한 번에 진행되고 <b>이어하기 없음</b></td><td>큰 파일 복사가 끊기면 처음부터 다시</td><td>큰 파일은 웹 파일 브라우저(업로드/다운로드 이어하기 지원)를 사용하세요.</td></tr>
+<tr><td>여유 공간 표시 안 됨</td><td>드라이브 용량이 틀리게 / 알 수 없게 보임</td><td>표시 문제일 뿐입니다. 실제 여유 공간은 웹 파일 브라우저 상단에 나옵니다.</td></tr>
+</table>
+
+<p data-l="en"><b>One-shot fix</b> — run in <b>Command Prompt as administrator</b>, then reconnect the drive:</p>
+<p data-l="ko"><b>한 번에 설정</b> — <b>관리자 권한 명령 프롬프트</b>에서 실행한 뒤 드라이브를 다시 연결하세요:</p>
+<div class="pre"><pre id="regfix"></pre></div>
+
+<h3 data-l="en">Third-party clients (no 4 GB limit, faster)</h3>
+<h3 data-l="ko">다른 클라이언트 (4GB 제한 없음, 더 빠름)</h3>
+<ul data-l="en">
+  <li><b>RaiDrive</b> — mounts WebDAV as a drive letter (NAS → WebDAV, address <code class="u-dav"></code>)</li>
+  <li><b>WinSCP</b> / <b>Cyberduck</b> — file transfer apps, protocol WebDAV, host/port of this server, path <code>/webdav/</code></li>
+  <li><b>rclone</b> — <code>rclone mount</code> or <code>rclone copy</code> with a WebDAV remote (vendor: other)</li>
+</ul>
+<ul data-l="ko">
+  <li><b>RaiDrive</b> — WebDAV를 드라이브 문자로 연결 (NAS → WebDAV, 주소 <code class="u-dav"></code>)</li>
+  <li><b>WinSCP</b> / <b>Cyberduck</b> — 파일 전송 프로그램, 프로토콜 WebDAV, 이 서버의 호스트/포트, 경로 <code>/webdav/</code></li>
+  <li><b>rclone</b> — WebDAV 리모트(vendor: other)로 <code>rclone mount</code> 또는 <code>rclone copy</code></li>
+</ul>
+
+<!-- ============================================================ macOS -->
+<h2>🍎 macOS</h2>
+<ol data-l="en">
+  <li>Finder → <b>Go</b> → <b>Connect to Server…</b> (⌘K)</li>
+  <li>Server address: <code class="u-dav"></code> → <b>Connect</b><span class="authOnly"> → enter any name and the password</span></li>
+</ol>
+<ol data-l="ko">
+  <li>Finder → <b>이동</b> → <b>서버에 연결…</b> (⌘K)</li>
+  <li>서버 주소: <code class="u-dav"></code> → <b>연결</b><span class="authOnly"> → 이름은 아무거나, 비밀번호 입력</span></li>
+</ol>
+<p class="muted" data-l="en">Finder writes <code>.DS_Store</code> and <code>._*</code> files to the server. To stop <code>.DS_Store</code> on network volumes: <code>defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true</code> (log out / in).</p>
+<p class="muted" data-l="ko">Finder는 서버에 <code>.DS_Store</code>, <code>._*</code> 파일을 만듭니다. 네트워크 볼륨에 <code>.DS_Store</code>를 만들지 않게 하려면: <code>defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true</code> (로그아웃 후 다시 로그인).</p>
+
+<!-- ============================================================ Linux -->
+<h2>🐧 Linux</h2>
+<ul data-l="en">
+  <li><b>GNOME Files</b>: Other Locations → Connect to Server: <code class="u-davs-dav"></code></li>
+  <li><b>KDE Dolphin</b>: address bar: <code class="u-davs-webdav"></code></li>
+  <li><b>Mount (davfs2)</b>:</li>
+</ul>
+<ul data-l="ko">
+  <li><b>GNOME 파일</b>: 다른 위치 → 서버에 연결: <code class="u-davs-dav"></code></li>
+  <li><b>KDE Dolphin</b>: 주소창에 <code class="u-davs-webdav"></code></li>
+  <li><b>마운트 (davfs2)</b>:</li>
+</ul>
+<div class="pre"><pre id="davfs"></pre></div>
+
+<!-- ============================================================ notes -->
+<h2 data-l="en">Notes</h2>
+<h2 data-l="ko">참고</h2>
+<ul data-l="en">
+  <li>The top folder <code>/webdav/</code> is read-only; files go inside a shared folder.</li>
+  <li>Moving files between different shared folders is not supported (copy instead).</li>
+  <li>WebDAV traffic is plain HTTP. Use it on a trusted network or a VPN.</li>
+  <li>Command line: <code id="curlex"></code></li>
+</ul>
+<ul data-l="ko">
+  <li>최상위 폴더 <code>/webdav/</code>는 읽기 전용입니다. 파일은 공유 폴더 안에 넣으세요.</li>
+  <li>서로 다른 공유 폴더 사이의 이동은 지원하지 않습니다 (복사를 사용하세요).</li>
+  <li>WebDAV 통신은 암호화되지 않은 HTTP입니다. 신뢰할 수 있는 네트워크나 VPN에서 사용하세요.</li>
+  <li>명령줄: <code id="curlex2"></code></li>
+</ul>
+
+</main>
+<script>
+'use strict';
+const AUTH={{AUTH}}, SHARES={{SHARES}};
+const host=location.host, hn=location.hostname, port=location.port||'80';
+const dav=`${location.protocol}//${host}/webdav/`;
+const unc=port==='80'?`\\\\${hn}\\webdav`:`\\\\${hn}@${port}\\webdav`;
+const fill=(sel,t)=>document.querySelectorAll(sel).forEach(e=>e.textContent=t);
+fill('.u-dav',dav);fill('.u-unc',unc);
+fill('.u-davs-dav',`dav://${host}/webdav/`);fill('.u-davs-webdav',`webdav://${host}/webdav/`);
+document.getElementById('shares').innerHTML=SHARES.map(n=>`<code>/webdav/${n.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}/</code>`).join(' ');
+document.getElementById('authInfo').innerHTML=AUTH
+  ?'<span class="badge">ON</span> <span data-l="en">password required (user name: anything)</span><span data-l="ko">비밀번호 필요 (사용자 이름: 아무거나)</span>'
+  :'<span class="badge off">OFF</span> <span data-l="en">no password</span><span data-l="ko">비밀번호 없음</span>';
+if(!AUTH)document.querySelectorAll('.authOnly,.authOnlyRow').forEach(e=>e.remove());
+document.getElementById('netuse').textContent=AUTH
+  ?`net use Z: ${dav} /user:tinyhfs * /persistent:yes\nrem  "*" asks for the password (user name can be anything)`
+  :`net use Z: ${dav} /persistent:yes`;
+const K='HKLM\\SYSTEM\\CurrentControlSet\\Services\\WebClient\\Parameters';
+document.getElementById('regfix').textContent=
+`sc config WebClient start= auto
+${AUTH?`reg add ${K} /v BasicAuthLevel /t REG_DWORD /d 2 /f\n`:''}reg add ${K} /v FileSizeLimitInBytes /t REG_DWORD /d 0xffffffff /f
+reg add ${K} /v FileAttributesLimitInBytes /t REG_DWORD /d 50000000 /f
+net stop WebClient
+net start WebClient`;
+document.getElementById('davfs').textContent=
+`sudo apt install davfs2
+sudo mkdir -p /mnt/tinyhfs
+sudo mount -t davfs ${dav} /mnt/tinyhfs${AUTH?'\n# user name: anything, password: server password':''}`;
+const cx=AUTH?`curl -u :PASSWORD -T file.txt ${dav}${SHARES[0]||''}/`:`curl -T file.txt ${dav}${SHARES[0]||''}/`;
+fill('#curlex',cx+'   (upload)');fill('#curlex2',cx+'   (업로드)');
+// copy buttons
+document.querySelectorAll('.pre').forEach(p=>{const b=document.createElement('button');b.textContent='Copy';
+  b.onclick=()=>{const t=p.querySelector('pre').textContent;const ok=()=>{b.textContent='✓';setTimeout(()=>b.textContent='Copy',1200)};
+    if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(ok);
+    else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');ok()}catch{}ta.remove()}};
+  p.appendChild(b)});
+// language
+function setLang(l){document.documentElement.lang=l;document.getElementById('lEn').className=l==='en'?'on':'';document.getElementById('lKo').className=l==='ko'?'on':'';try{localStorage.setItem('tinyhfs-lang',l)}catch{}}
+let lang='en';try{lang=localStorage.getItem('tinyhfs-lang')||((navigator.language||'').startsWith('ko')?'ko':'en')}catch{}
+setLang(lang);
+document.getElementById('lEn').onclick=()=>setLang('en');document.getElementById('lKo').onclick=()=>setLang('ko');
+</script>
+</body>
+</html>

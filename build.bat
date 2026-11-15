@@ -1,5 +1,5 @@
 @echo off
-rem Build single executable on Windows. Requires Go >= 1.21.
+rem Build single executable on Windows. Requires Go >= 1.26.
 rem Title date = git commit time (embedded automatically when built inside a git repo),
 rem otherwise the executable's modification time.
 rem Icon: if go-winres is installed it regenerates rsrc_windows_*.syso from winres\icon.png,

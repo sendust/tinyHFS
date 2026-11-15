@@ -72,6 +72,8 @@ tbody tr.sel td{background:var(--hl)}
 #sinfo .w{color:var(--warn)}
 .name .dirpart{color:var(--muted)}
 #bOut{display:none}
+.davlink{font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;color:var(--fg);text-decoration:none;white-space:nowrap}
+.davlink:hover{border-color:var(--acc)}
 @media (max-width:820px){.search input{width:150px}}
 #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;display:none;z-index:30;max-width:90vw}
 </style>
@@ -81,6 +83,7 @@ tbody tr.sel td{background:var(--hl)}
   <h1>tinyHFS <small>by sendust · [{{VERSION}}]</small></h1>
   <div class="roots" id="roots"></div>
   <div class="free" id="free"></div>
+  <a href="/webdav/" class="davlink" title="Connect as a network drive (WebDAV)">🔗 WebDAV</a>
   <button id="bOut" title="Log out">⎋ Logout</button>
 </header>
 <main>

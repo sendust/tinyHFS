@@ -58,6 +58,7 @@ tinyhfs -auth MyPass123 /mnt     # password protected
 - Create folders
 - **File search**: searches the current folder and all subfolders by name. Case-insensitive; space separated words must all match (`report 2026`); wildcards `*` `?` match the whole name (`*.mp4`). Up to 1000 results / 20 s per search. Results can be downloaded, zipped (folder structure kept) or opened
 - **Password authentication** (`-auth`)
+- **WebDAV server** at `/webdav/` — connect as a network drive (see [WebDAV](#webdav))
 - Transfer panel: size, %, speed, remaining time, cancel / resume
 
 ## Authentication
@@ -76,9 +77,41 @@ tinyhfs -auth MyPass123 /mnt
 - The password on the command line is visible to other users of the host (`ps`). To avoid that, set the environment variable `TINYHFS_AUTH` instead of `-auth`.
 - Traffic is plain HTTP (not encrypted). Use it on trusted networks or behind a VPN / HTTPS reverse proxy.
 
+## WebDAV
+
+Every shared folder is also served over WebDAV:
+
+```
+http://<address>:10002/webdav/            top folder (read-only), one sub folder per root
+http://<address>:10002/webdav/<root name>/ files of that root (read/write)
+```
+
+Opening `/webdav/` in a web browser shows a **connection guide** (English / 한국어) with the real server address filled in:
+how to map a network drive on Windows, macOS and Linux, and the limits of the built-in Windows WebDAV client with workarounds.
+The 🔗 WebDAV button in the web UI opens the same page.
+
+Windows quick start:
+
+```
+net use Z: http://<address>:10002/webdav/ /persistent:yes
+```
+
+Built-in Windows client limits (details and a fix script on the guide page):
+
+| Limit | Workaround |
+|---|---|
+| `WebClient` service must run | `sc config WebClient start= auto` + `net start WebClient` |
+| Password over plain HTTP refused (with `-auth`) | registry `BasicAuthLevel = 2` |
+| Files > 50 MB fail | registry `FileSizeLimitInBytes = 0xFFFFFFFF` (max 4 GB; larger files: use the web UI or RaiDrive / WinSCP / rclone) |
+| Big folders fail to list | registry `FileAttributesLimitInBytes = 50000000` |
+| Slow | Internet Options → LAN settings → uncheck "Automatically detect settings" |
+
+With `-auth`, WebDAV clients log in with any user name and the server password.
+Moving files between different roots is not supported, and the roots themselves cannot be deleted or renamed.
+
 ## Build
 
-Requires Go ≥ 1.21 (https://go.dev/dl/).
+Requires Go ≥ 1.26 (https://go.dev/dl/). Dependency: `golang.org/x/net/webdav` (fetched automatically by `go build`).
 
 ```
 ./build.sh        # Linux/macOS → dist/tinyhfs, dist/tinyhfs.exe, dist/tinyhfs-arm64
@@ -102,6 +135,7 @@ The page title is `tinyHFS by sendust <commit date/time>`. The date comes from t
 | GET | `/api/progress?ids=` | Download progress |
 | POST | `/api/cancel?tid=` | Cancel a download |
 | POST | `/api/login` (`{"password":"..."}`) / `/api/logout` | Login / logout (when `-auth` is used) |
+| WebDAV | `/webdav/...` | WebDAV class 1/2 (PROPFIND, PUT, MKCOL, COPY, MOVE, DELETE, LOCK …) |
 
 ## Notes
 

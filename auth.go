@@ -178,7 +178,8 @@ func authMW(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/login" || p == "/api/login" || p == "/api/logout" || iconFiles[p] != "" {
+		if p == "/login" || p == "/api/login" || p == "/api/logout" || iconFiles[p] != "" ||
+			isDavGuidePath(r) || (p == "/" && r.Method == http.MethodOptions) {
 			next.ServeHTTP(w, r)
 			return
 		}

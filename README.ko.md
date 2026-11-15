@@ -58,6 +58,7 @@ tinyhfs -auth MyPass123 /mnt     # 비밀번호 보호
 - 폴더 만들기
 - **파일 검색**: 현재 폴더와 모든 하위 폴더에서 이름으로 검색합니다. 대소문자를 구분하지 않고, 공백으로 나눈 단어는 모두 포함돼야 합니다 (`report 2026`). 와일드카드 `*` `?`는 이름 전체와 비교합니다 (`*.mp4`). 검색 한 번에 최대 1000개 / 20초. 결과에서 바로 다운로드, zip 압축(폴더 구조 유지), 폴더 열기가 됩니다.
 - **비밀번호 인증** (`-auth`)
+- **WebDAV 서버** `/webdav/` — 네트워크 드라이브로 연결 ([WebDAV](#webdav) 참고)
 - 전송 패널: 파일 크기, %, 전송 속도, 남은 시간, 취소 / 재개
 
 ## 인증
@@ -76,9 +77,41 @@ tinyhfs -auth MyPass123 /mnt
 - 명령줄에 쓴 비밀번호는 같은 서버의 다른 사용자에게 보입니다 (`ps`). 이를 피하려면 `-auth` 대신 환경변수 `TINYHFS_AUTH`를 설정하세요.
 - 통신은 암호화되지 않은 HTTP입니다. 신뢰할 수 있는 네트워크나 VPN / HTTPS 리버스 프록시 뒤에서 사용하세요.
 
+## WebDAV
+
+모든 공유 폴더를 WebDAV로도 제공합니다.
+
+```
+http://<주소>:10002/webdav/              최상위 폴더 (읽기 전용), root마다 하위 폴더 하나
+http://<주소>:10002/webdav/<root 이름>/  해당 root의 파일 (읽기/쓰기)
+```
+
+웹 브라우저로 `/webdav/`를 열면 실제 서버 주소가 채워진 **연결 안내 페이지**(English / 한국어)가 나옵니다.
+Windows, macOS, Linux에서 네트워크 드라이브를 연결하는 방법과, Windows 내장 WebDAV 클라이언트의 제약 및 우회 방법을 설명합니다.
+웹 UI의 🔗 WebDAV 버튼으로도 같은 페이지가 열립니다.
+
+Windows 빠른 연결:
+
+```
+net use Z: http://<주소>:10002/webdav/ /persistent:yes
+```
+
+Windows 내장 클라이언트의 제약 (자세한 설명과 설정 스크립트는 안내 페이지에 있습니다):
+
+| 제약 | 우회 방법 |
+|---|---|
+| `WebClient` 서비스가 실행 중이어야 함 | `sc config WebClient start= auto` + `net start WebClient` |
+| HTTP에서 비밀번호 전송 거부 (`-auth` 사용 시) | 레지스트리 `BasicAuthLevel = 2` |
+| 50MB 넘는 파일 실패 | 레지스트리 `FileSizeLimitInBytes = 0xFFFFFFFF` (최대 4GB, 더 큰 파일은 웹 UI나 RaiDrive / WinSCP / rclone 사용) |
+| 큰 폴더 목록 실패 | 레지스트리 `FileAttributesLimitInBytes = 50000000` |
+| 느림 | 인터넷 옵션 → LAN 설정 → "자동으로 설정 검색" 해제 |
+
+`-auth`를 쓰면 WebDAV 클라이언트는 사용자 이름은 아무거나, 비밀번호는 서버 비밀번호로 로그인합니다.
+서로 다른 root 사이의 이동은 지원하지 않고, root 폴더 자체는 삭제하거나 이름을 바꿀 수 없습니다.
+
 ## 빌드
 
-Go 1.21 이상이 필요합니다 (https://go.dev/dl/).
+Go 1.26 이상이 필요합니다 (https://go.dev/dl/). 의존성: `golang.org/x/net/webdav` (`go build` 시 자동으로 받습니다).
 
 ```
 ./build.sh        # Linux/macOS → dist/tinyhfs, dist/tinyhfs.exe, dist/tinyhfs-arm64
@@ -102,6 +135,7 @@ build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 | GET | `/api/progress?ids=` | 다운로드 진행 상태 |
 | POST | `/api/cancel?tid=` | 다운로드 취소 |
 | POST | `/api/login` (`{"password":"..."}`) / `/api/logout` | 로그인 / 로그아웃 (`-auth` 사용 시) |
+| WebDAV | `/webdav/...` | WebDAV class 1/2 (PROPFIND, PUT, MKCOL, COPY, MOVE, DELETE, LOCK …) |
 
 ## 참고
 

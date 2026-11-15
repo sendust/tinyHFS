@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build single executables for Linux and Windows. Requires Go >= 1.21.
+# Build single executables for Linux and Windows. Requires Go >= 1.26.
 # Windows icon/version info: install go-winres once (go install github.com/tc-hib/go-winres@latest);
 # without it the committed rsrc_windows_*.syso files are used as they are.
 set -e

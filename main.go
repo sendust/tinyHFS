@@ -32,7 +32,7 @@ import (
 	"time"
 )
 
-//go:embed web/index.html web/login.html web/favicon.ico web/favicon-32x32.png web/apple-touch-icon.png
+//go:embed web/index.html web/login.html web/webdav.html web/favicon.ico web/favicon-32x32.png web/apple-touch-icon.png
 var webFS embed.FS
 
 // buildDate may be set with: -ldflags "-X 'main.buildDate=2026-01-01 12:00:00'"
@@ -404,6 +404,19 @@ func (c *countReader) Read(p []byte) (int, error) {
 func handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+	case http.MethodOptions: // Windows WebDAV client probes the server root
+		w.Header().Set("DAV", "1, 2")
+		w.Header().Set("MS-Author-Via", "DAV")
+		w.Header().Set("Allow", "OPTIONS, GET, HEAD")
+		w.WriteHeader(http.StatusOK)
+		return
+	default:
+		w.Header().Set("Allow", "OPTIONS, GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -910,6 +923,10 @@ func logMW(next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 		p := r.URL.Path
 		quiet := p == "/api/progress" || p == "/api/upload/status" || (p == "/api/upload" && sw.code < 400)
+		switch r.Method { // WebDAV clients send these constantly
+		case "PROPFIND", "OPTIONS", "LOCK", "UNLOCK", "PROPPATCH":
+			quiet = quiet || sw.code < 400 || sw.code == http.StatusUnauthorized
+		}
 		if quiet {
 			return
 		}
@@ -1059,6 +1076,9 @@ func main() {
 		"{{VERSION}}", html.EscapeString(version),
 		"{{HOSTNAME}}", html.EscapeString(host),
 	).Replace(string(b)))
+	if err := initWebDAV(host); err != nil {
+		logger.Fatal(err)
+	}
 
 	ips := ipv4Addrs()
 	if len(ips) == 0 {
@@ -1085,6 +1105,8 @@ func main() {
 	mux.HandleFunc("/login", handleLoginPage)
 	mux.HandleFunc("/api/login", handleLogin)
 	mux.HandleFunc("/api/logout", handleLogout)
+	mux.HandleFunc(davPrefix, handleWebDAV)
+	mux.HandleFunc(davPrefix+"/", handleWebDAV)
 	mux.HandleFunc("/dl/", handleDownload)
 	mux.HandleFunc("/zip/", handleZip)
 
@@ -1109,6 +1131,11 @@ func main() {
 	for _, n := range used {
 		fmt.Fprintf(&sb, "   http://%s:%d/    (%s)\n", n.ip, port, n.nic)
 	}
+	fmt.Fprintf(&sb, "\n WebDAV (network drive):\n")
+	for _, n := range used {
+		fmt.Fprintf(&sb, "   http://%s:%d%s/\n", n.ip, port, davPrefix)
+	}
+	fmt.Fprintf(&sb, "   (open the WebDAV address in a web browser for the connection guide)\n")
 	if authEnabled {
 		fmt.Fprintf(&sb, "\n Authentication: ON (password required)\n")
 	} else {
