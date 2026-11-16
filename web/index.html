@@ -45,6 +45,16 @@ tbody tr.sel td{background:var(--hl)}
 .name a:hover{text-decoration:underline;color:var(--acc)}
 .ico{display:inline-block;width:22px}
 .act button{padding:2px 8px;font-size:12px}
+tr.up{cursor:pointer}
+tr.up td{padding-top:9px;padding-bottom:9px}
+tr.up:hover td{background:var(--hl)}
+tr.up .name{color:var(--acc);font-weight:600}
+.crumbs{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.crumbs button.upb{margin-right:10px;padding:4px 12px}
+.ips{max-width:1200px;margin:0 auto;padding:6px 16px 0;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ips a{color:var(--fg);text-decoration:none;font-family:ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
+.ips a:hover{border-color:var(--acc)}
+.ips a small{color:var(--muted);font-family:system-ui,sans-serif;margin-left:4px}
 .empty{padding:30px;text-align:center;color:var(--muted)}
 .hint{color:var(--muted);font-size:12px;margin-top:8px}
 #drop{position:fixed;inset:0;background:rgba(37,99,235,.12);border:3px dashed var(--acc);display:none;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--acc);z-index:20;pointer-events:none}
@@ -86,6 +96,7 @@ tbody tr.sel td{background:var(--hl)}
   <a href="/webdav/" class="davlink" title="Connect as a network drive (WebDAV)">🔗 WebDAV</a>
   <button id="bOut" title="Log out">⎋ Logout</button>
 </header>
+<div class="ips" id="ips"></div>
 <main>
   <div class="crumbs" id="crumbs"></div>
   <div class="toolbar">
@@ -153,7 +164,9 @@ let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.style.display
 // ---------- navigation
 function go(root,path){const h='#/'+root+'/'+encPath(path);if(location.hash===h)load();else location.hash=h}
 function parseHash(){const parts=location.hash.replace(/^#\/?/,'').split('/');let root=parseInt(parts[0],10);if(isNaN(root)||root<0||root>=S.roots.length)root=0;let segs=[];try{segs=parts.slice(1).filter(Boolean).map(decodeURIComponent)}catch{}return {root,path:'/'+segs.join('/')}}
-async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';renderRoots()}
+async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';renderRoots();renderIPs(d.ips||[])}
+function renderIPs(ips){const el=$('#ips');el.innerHTML=ips.length?'🌐 Host IPv4':'';
+  for(const i of ips){const a=document.createElement('a');a.href=i.url;a.title=i.url;a.innerHTML=`${esc(i.ip)}<small>${esc(i.nic)}</small>`;el.appendChild(a)}}
 async function load(){
   const {root,path}=parseHash();
   const changed=root!==S.root||path!==S.path;S.root=root;S.path=path;if(changed)S.sel.clear();
@@ -172,12 +185,14 @@ function renderRoots(){const el=$('#roots');el.innerHTML='';
   else S.roots.forEach(r=>{const b=document.createElement('button');b.textContent='📁 '+r.name;b.title=`${r.path}\nfree ${fmtSize(r.free)} / ${fmtSize(r.total)}`;if(r.index===S.root)b.className='active';b.onclick=()=>go(r.index,'/');el.appendChild(b)})}
 function renderFree(free,total){const used=total?(total-free)/total*100:0;const r=S.roots[S.root];
   $('#free').innerHTML=`<div title="${esc(r?r.path:'')}">Free <b>${fmtSize(free)}</b> of ${fmtSize(total)} &nbsp;(${r?esc(r.path):''})</div><div class="bar"><i style="width:${used.toFixed(1)}%"></i></div>`}
+function goUp(){if(S.path!=='/')go(S.root,S.path.replace(/\/[^/]*$/,'')||'/')}
 function renderCrumbs(){const el=$('#crumbs');const r=S.roots[S.root];el.innerHTML='';
+  const ub=document.createElement('button');ub.className='upb';ub.textContent='⬆ Up';ub.title='Parent folder (Backspace)';ub.disabled=S.path==='/';ub.onclick=goUp;el.appendChild(ub);
   const add=(txt,p)=>{const a=document.createElement('a');a.textContent=txt;a.onclick=()=>go(S.root,p);el.appendChild(a)};
   add(r?r.name:'root','/');let acc='';for(const s of S.path.split('/').filter(Boolean)){acc+='/'+s;const sp=document.createElement('span');sp.className='sep';sp.textContent='›';el.appendChild(sp);add(s,acc)}}
 function sorted(){const {k,asc}=S.sort;return [...S.entries].sort((a,b)=>{if(a.dir!==b.dir)return a.dir?-1:1;let v=k==='name'?a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'}):(a[k]-b[k]);return asc?v:-v})}
 function renderList(){const tb=$('#list');tb.innerHTML='';
-  if(S.path!=='/'&&!S.search){const tr=document.createElement('tr');tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span><a>..</a></td>`;tr.querySelector('a').onclick=()=>go(S.root,S.path.replace(/\/[^/]*$/,'')||'/');tb.appendChild(tr)}
+  if(S.path!=='/'&&!S.search){const tr=document.createElement('tr');tr.className='up';tr.title='Parent folder';tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span>.. &nbsp;Parent folder</td>`;tr.onclick=goUp;tb.appendChild(tr)}
   const list=sorted();
   if(!list.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="empty">${S.search?'No matches':'Empty folder — drop files here to upload'}</td>`;tb.appendChild(tr)}
   for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';
@@ -316,6 +331,7 @@ async function doSearch(){
 function clearSearch(){endSearch();load()}
 $('#fSearch').onsubmit=ev=>{ev.preventDefault();$('#q').value.trim()?doSearch():clearSearch()};
 $('#q').addEventListener('keydown',ev=>{if(ev.key==='Escape')clearSearch()});
+document.addEventListener('keydown',ev=>{if(ev.key==='Backspace'&&!ev.altKey&&!ev.ctrlKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)&&!document.activeElement.isContentEditable&&!S.search){ev.preventDefault();goUp()}});
 
 // ---------- toolbar
 $('#bUp').onclick=()=>$('#fUp').click();

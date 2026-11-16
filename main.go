@@ -460,7 +460,16 @@ func handleRoots(w http.ResponseWriter, r *http.Request) {
 		f, t := diskUsage(rt.Path)
 		out = append(out, rootInfo{i, rt.Name, rt.Path, f, t})
 	}
-	writeJSON(w, 200, map[string]any{"version": version, "auth": authEnabled, "roots": out})
+	type ipInfo struct {
+		NIC string `json:"nic"`
+		IP  string `json:"ip"`
+		URL string `json:"url"`
+	}
+	ips := []ipInfo{}
+	for _, a := range ipv4Addrs() {
+		ips = append(ips, ipInfo{a.nic, a.ip, fmt.Sprintf("http://%s:%d/", a.ip, listenPort)})
+	}
+	writeJSON(w, 200, map[string]any{"version": version, "auth": authEnabled, "roots": out, "ips": ips})
 }
 
 func handleList(w http.ResponseWriter, r *http.Request) {
@@ -947,6 +956,8 @@ func logMW(next http.Handler) http.Handler {
 
 type nicIP struct{ nic, ip string }
 
+var listenPort int // port actually bound (shown in the web UI)
+
 // all IPv4 addresses of interfaces that are up with link
 func ipv4Addrs() []nicIP {
 	var out []nicIP
@@ -1088,6 +1099,7 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
+	listenPort = port
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleIndex)
