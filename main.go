@@ -469,7 +469,7 @@ func handleRoots(w http.ResponseWriter, r *http.Request) {
 	for _, a := range ipv4Addrs() {
 		ips = append(ips, ipInfo{a.nic, a.ip, fmt.Sprintf("http://%s:%d/", a.ip, listenPort)})
 	}
-	writeJSON(w, 200, map[string]any{"version": version, "auth": authEnabled, "roots": out, "ips": ips})
+	writeJSON(w, 200, map[string]any{"version": version, "auth": authEnabled, "roots": out, "ips": ips, "hostname": hostName()})
 }
 
 func handleList(w http.ResponseWriter, r *http.Request) {
@@ -955,6 +955,11 @@ func logMW(next http.Handler) http.Handler {
 // ---------------------------------------------------------------- network
 
 type nicIP struct{ nic, ip string }
+
+func hostName() string {
+	h, _ := os.Hostname()
+	return h
+}
 
 var listenPort int // port actually bound (shown in the web UI)
 

@@ -53,6 +53,7 @@ tr.up .name{color:var(--acc);font-weight:600}
 .crumbs button.upb{margin-right:10px;padding:4px 12px}
 .ips{max-width:1200px;margin:0 auto;padding:6px 16px 0;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .ips a{color:var(--fg);text-decoration:none;font-family:ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
+.ips .hn{color:var(--fg);font-size:13px}
 .ips a:hover{border-color:var(--acc)}
 .ips a small{color:var(--muted);font-family:system-ui,sans-serif;margin-left:4px}
 .empty{padding:30px;text-align:center;color:var(--muted)}
@@ -164,8 +165,8 @@ let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.style.display
 // ---------- navigation
 function go(root,path){const h='#/'+root+'/'+encPath(path);if(location.hash===h)load();else location.hash=h}
 function parseHash(){const parts=location.hash.replace(/^#\/?/,'').split('/');let root=parseInt(parts[0],10);if(isNaN(root)||root<0||root>=S.roots.length)root=0;let segs=[];try{segs=parts.slice(1).filter(Boolean).map(decodeURIComponent)}catch{}return {root,path:'/'+segs.join('/')}}
-async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';renderRoots();renderIPs(d.ips||[])}
-function renderIPs(ips){const el=$('#ips');el.innerHTML=ips.length?'🌐 Host IPv4':'';
+async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';renderRoots();renderIPs(d.ips||[],d.hostname)}
+function renderIPs(ips,host){const el=$('#ips');el.innerHTML=(host?`🖥 <b class="hn">${esc(host)}</b>`:'')+(ips.length?' &nbsp;🌐 IPv4':'');
   for(const i of ips){const a=document.createElement('a');a.href=i.url;a.title=i.url;a.innerHTML=`${esc(i.ip)}<small>${esc(i.nic)}</small>`;el.appendChild(a)}}
 async function load(){
   const {root,path}=parseHash();
