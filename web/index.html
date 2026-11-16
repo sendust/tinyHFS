@@ -82,6 +82,27 @@ tr.up .name{color:var(--acc);font-weight:600}
 #sinfo .n{color:var(--muted)}
 #sinfo .w{color:var(--warn)}
 .name .dirpart{color:var(--muted)}
+/* image preview: right half of the window */
+#pv{position:fixed;top:0;right:0;bottom:0;width:var(--pw,50vw);background:var(--panel);border-left:1px solid var(--line);z-index:6;display:none;flex-direction:column}
+body.split #pv{display:flex}
+body.split{padding-right:var(--pw,50vw)}
+body.split main{max-width:none}
+body.split #xfer{right:var(--pw,50vw)}
+#pv .ph{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);min-width:0}
+#pv .pt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+#pv .pt small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+#pv .ph button,#pv .ph a.btn{padding:4px 9px;white-space:nowrap}
+#pv .ph a.btn{font-size:13px;border:1px solid var(--line);border-radius:6px;color:var(--fg);text-decoration:none}
+#pv .ph a.btn:hover{border-color:var(--acc)}
+#pv .pb{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px;position:relative;background:repeating-conic-gradient(var(--line) 0 25%,transparent 0 50%) 0 0/20px 20px}
+#pv .pb img{max-width:100%;max-height:100%;object-fit:contain;display:block;box-shadow:0 1px 8px rgba(0,0,0,.25)}
+#pv .pmsg{position:absolute;color:var(--muted);background:var(--panel);padding:4px 10px;border-radius:5px}
+#pv .grip{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:1}
+#pv .grip:hover,#pv.drag .grip{background:var(--acc);opacity:.35}
+#pv.drag{user-select:none}
+tbody tr.pvcur td{background:var(--hl)}
+tbody tr.pvcur td.name{font-weight:600}
+@media (max-width:760px){#pv{width:100vw!important}body.split{padding-right:0}body.split #xfer{right:0}}
 #bOut{display:none}
 .davlink{font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;color:var(--fg);text-decoration:none;white-space:nowrap}
 .davlink:hover{border-color:var(--acc)}
@@ -132,6 +153,18 @@ tr.up .name{color:var(--acc);font-weight:600}
   <div class="hint">Drag &amp; drop files/folders onto the page to upload (interrupted uploads resume automatically when you upload the same file again).
   Drag a file row to your desktop to download (Chrome/Edge). Interrupted downloads can be resumed from the browser's download manager.</div>
 </main>
+<div id="pv">
+  <div class="grip" id="pvGrip" title="Drag to resize"></div>
+  <div class="ph">
+    <button id="pvPrev" title="Previous image (←)">◀</button>
+    <button id="pvNext" title="Next image (→)">▶</button>
+    <div class="pt"><span id="pvName"></span><small id="pvInfo"></small></div>
+    <a class="btn" id="pvOpen" target="_blank" rel="noopener" title="Open original in a new tab">↗</a>
+    <button id="pvDl" title="Download">⬇</button>
+    <button id="pvX" title="Close (Esc)">✕</button>
+  </div>
+  <div class="pb" id="pvBody"><img id="pvImg" alt=""><span class="pmsg" id="pvMsg"></span></div>
+</div>
 <div id="drop">Drop files or folders to upload</div>
 <div id="xfer" class="hide">
   <div class="head"><span>Transfers</span><span id="xsum" class="n" style="font-weight:400"></span><span class="sp"></span>
@@ -204,7 +237,8 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
       <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
     tr.querySelector('input').onchange=ev=>{ev.target.checked?S.sel.add(e.name):S.sel.delete(e.name);tr.classList.toggle('sel',ev.target.checked);updSel()};
     const a=tr.querySelector('.name a');
-    if(!e.dir)a.onclick=ev=>{ev.preventDefault();downloadFile(S.root,p,bn,e.size)};
+    if(!e.dir)a.onclick=ev=>{ev.preventDefault();isImg(bn)?openPv(p):downloadFile(S.root,p,bn,e.size)};
+    if(!e.dir&&isImg(bn)){tr.dataset.pv=p;if(PV.open&&PV.root===S.root&&PV.list[PV.i]&&PV.list[PV.i].p===p)tr.classList.add('pvcur')}
     tr.querySelector('.act button').onclick=()=>e.dir?downloadZip(S.root,p,[],bn+'.zip'):downloadFile(S.root,p,bn,e.size);
     // drag out => download (Chromium: DownloadURL)
     tr.draggable=true;
@@ -309,6 +343,37 @@ async function poll(){if(!pollSet.size){clearInterval(pollT);pollT=null;return}
     if(p.total>=0)x.total=p.total;x.sent=p.sent;x.update(p.done);
     if(p.finished){pollSet.delete(x);x.active=false;if(p.error)x.fail(p.error+(p.error!=='interrupted'&&p.error.indexOf('cancel')<0?'':' — resume in browser downloads'));else x.finish()}
     else if(x.status!=='downloading'&&x.status!=='zipping')x.set(x.kind==='zip'?'zipping':'downloading')}}
+// ---------------------------------------------------------------- image preview
+const IMG_RE=/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i;
+function isImg(n){return IMG_RE.test(n)}
+const PV={open:false,root:0,list:[],i:0};
+function pvURL(root,p){return dlURL(root,p)+'?inline=1'}
+function openPv(p){PV.root=S.root;PV.list=sorted().filter(e=>!e.dir&&isImg(e.name)).map(e=>({p:joinP(S.path,e.name),name:base(e.name),size:e.size,mtime:e.mtime}));
+  PV.i=Math.max(0,PV.list.findIndex(x=>x.p===p));PV.open=true;document.body.classList.add('split');showPv()}
+function showPv(){const it=PV.list[PV.i];if(!it)return closePv();
+  const img=$('#pvImg'),msg=$('#pvMsg'),url=pvURL(PV.root,it.p);
+  $('#pvName').textContent=it.name;$('#pvName').parentNode.title=it.p;$('#pvInfo').textContent=`${PV.i+1} / ${PV.list.length} · ${fmtSize(it.size)}`;
+  $('#pvOpen').href=url;$('#pvPrev').disabled=PV.i<=0;$('#pvNext').disabled=PV.i>=PV.list.length-1;
+  msg.textContent='Loading…';msg.style.display='';img.style.visibility='hidden';
+  img.onload=()=>{msg.style.display='none';img.style.visibility='';if(img.naturalWidth)$('#pvInfo').textContent=`${PV.i+1} / ${PV.list.length} · ${img.naturalWidth} × ${img.naturalHeight} · ${fmtSize(it.size)}`};
+  img.onerror=()=>{img.style.visibility='hidden';msg.textContent='Cannot display this image in the browser';msg.style.display=''};
+  img.src=url;
+  document.querySelectorAll('#list tr.pvcur').forEach(t=>t.classList.remove('pvcur'));
+  if(PV.root===S.root)for(const t of document.querySelectorAll('#list tr[data-pv]'))if(t.dataset.pv===it.p){t.classList.add('pvcur');t.scrollIntoView({block:'nearest'})}
+  const nx=PV.list[PV.i+1];if(nx){const pre=new Image();pre.src=pvURL(PV.root,nx.p)}}
+function stepPv(d){const n=PV.i+d;if(n<0||n>=PV.list.length)return;PV.i=n;showPv()}
+function closePv(){PV.open=false;document.body.classList.remove('split');$('#pvImg').removeAttribute('src');document.querySelectorAll('#list tr.pvcur').forEach(t=>t.classList.remove('pvcur'))}
+$('#pvPrev').onclick=()=>stepPv(-1);$('#pvNext').onclick=()=>stepPv(1);$('#pvX').onclick=closePv;
+$('#pvDl').onclick=()=>{const it=PV.list[PV.i];if(it)downloadFile(PV.root,it.p,it.name,it.size)};
+$('#pvBody').onclick=ev=>{if(ev.target.id==='pvBody')closePv()};
+(()=>{let w0=null;try{w0=localStorage.getItem('tinyhfs.pw')}catch{}if(w0)document.documentElement.style.setProperty('--pw',w0);
+  const g=$('#pvGrip'),pv=$('#pv');g.addEventListener('pointerdown',ev=>{ev.preventDefault();g.setPointerCapture(ev.pointerId);pv.classList.add('drag');
+    const mv=e=>{const w=Math.min(Math.max(window.innerWidth-e.clientX,240),window.innerWidth-240);document.documentElement.style.setProperty('--pw',w+'px')};
+    const up=()=>{pv.classList.remove('drag');g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);try{localStorage.setItem('tinyhfs.pw',getComputedStyle(document.documentElement).getPropertyValue('--pw').trim())}catch{}};
+    g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up)})})();
+document.addEventListener('keydown',ev=>{if(!PV.open||ev.altKey||ev.ctrlKey||ev.metaKey||/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))return;
+  if(ev.key==='Escape'){closePv();ev.preventDefault()}else if(ev.key==='ArrowLeft'){stepPv(-1);ev.preventDefault()}else if(ev.key==='ArrowRight'){stepPv(1);ev.preventDefault()}});
+
 function downloadFile(root,p,name,size){nativeDownload(dlURL(root,p),name,'down',size)}
 function downloadZip(root,dir,names,fname){nativeDownload(zipURL(root,dir,names),fname,'zip',-1)}
 

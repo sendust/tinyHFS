@@ -57,6 +57,7 @@ tinyhfs -auth MyPass123 /mnt     # password protected
 - Folder zip download (selection or whole folder); compression: store / **fast (default)** / normal / best
 - Create folders
 - **File search**: searches the current folder and all subfolders by name. Case-insensitive; space separated words must all match (`report 2026`); wildcards `*` `?` match the whole name (`*.mp4`). Up to 1000 results / 20 s per search. Results can be downloaded, zipped (folder structure kept) or opened
+- **Image preview**: clicking an image (jpg, png, gif, webp, bmp, svg, avif, ico) opens it in a right-side pane, scaled to fit, instead of downloading. ◀ ▶ / arrow keys browse images in the folder, Esc closes, drag the pane edge to resize
 - **Password authentication** (`-auth`)
 - **WebDAV server** at `/webdav/` — connect as a network drive (see [WebDAV](#webdav))
 - Transfer panel: size, %, speed, remaining time, cancel / resume

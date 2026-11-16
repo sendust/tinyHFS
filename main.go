@@ -694,6 +694,9 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 	disp := "attachment"
 	if q.Get("inline") == "1" {
 		disp = "inline"
+		// opened directly in a tab (e.g. an SVG): never let the file run scripts on our origin
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 	} else {
 		w.Header().Set("Content-Type", "application/octet-stream")
 	}
