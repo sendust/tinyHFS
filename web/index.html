@@ -543,7 +543,6 @@ $('#pvMd').addEventListener('click',ev=>{const a=ev.target.closest('a[data-ancho
   const t=document.getElementById('md-'+a.dataset.anchor);if(t)t.scrollIntoView({behavior:'smooth',block:'start'})});
 $('#pvSrc').onclick=()=>{pvOpt.src=!pvOpt.src;showPv()};
 $('#pvDl').onclick=()=>{const it=PV.list[PV.i];if(it)downloadFile(PV.root,it.p,it.name,it.size)};
-$('#pvBody').onclick=ev=>{if(ev.target.id==='pvBody')closePv()};
 (()=>{let w0=null;try{w0=localStorage.getItem('tinyhfs.pw')}catch{}if(w0)document.documentElement.style.setProperty('--pw',w0);
   const g=$('#pvGrip'),pv=$('#pv');g.addEventListener('pointerdown',ev=>{ev.preventDefault();g.setPointerCapture(ev.pointerId);pv.classList.add('drag');
     const mv=e=>{const w=Math.min(Math.max(window.innerWidth-e.clientX,240),window.innerWidth-240);document.documentElement.style.setProperty('--pw',w+'px')};
