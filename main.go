@@ -951,6 +951,9 @@ type statusWriter struct {
 	hdr  bool
 }
 
+// Unwrap lets http.ResponseController reach the real writer (Flush for streamed search).
+func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
 func (s *statusWriter) WriteHeader(c int) {
 	if !s.hdr {
 		s.code, s.hdr = c, true

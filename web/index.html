@@ -83,6 +83,9 @@ tr.up .name{color:var(--acc);font-weight:600}
 #sinfo{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 8px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--hl);font-size:13px}
 #sinfo.show{display:flex}
 #sinfo .n{color:var(--muted)}
+#sinfo .cur{max-width:40ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+#sinfo .spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 #sinfo .w{color:var(--warn)}
 .name .dirpart{color:var(--muted)}
 tbody tr.denied td{color:var(--muted)}
@@ -275,7 +278,7 @@ function sorted(){const {k,asc}=S.sort;return [...S.entries].sort((a,b)=>{if(a.d
 function renderList(){const tb=$('#list');tb.innerHTML='';
   if(S.path!=='/'&&!S.search){const tr=document.createElement('tr');tr.className='up';tr.title='Parent folder';tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span>.. &nbsp;Parent folder</td>`;tr.onclick=goUp;tb.appendChild(tr)}
   const list=sorted();
-  if(!list.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="empty">${S.search?'No matches':'Empty folder — drop files here to upload'}</td>`;tb.appendChild(tr)}
+  if(!list.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="empty">${S.search?(S.search.running?'Searching…':'No matches'):'Empty folder — drop files here to upload'}</td>`;tb.appendChild(tr)}
   const nDen=list.filter(e=>e.denied).length;
   if(nDen){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="warn">🔒 ${nDen} item(s) cannot be accessed (permission denied on the server). Folders need <b>r + x</b> permission for the user running tinyHFS — e.g. <code>sudo chmod -R a+rX &lt;folder&gt;</code></td>`;tb.appendChild(tr)}
   for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';
@@ -561,16 +564,40 @@ async function doSearch(){
   const q=$('#q').value.trim()||(S.search&&S.search.q)||'';if(!q){clearSearch();return}
   $('#q').value=q;
   if(searchAbort)searchAbort.abort();const ac=new AbortController();searchAbort=ac;
-  const si=$('#sinfo');si.classList.add('show');si.innerHTML=`🔍 Searching “${esc(q)}” in ${esc(S.path)} …`;
-  try{const d=await api(`/api/search?root=${S.root}&path=${encodeURIComponent(S.path)}&q=${encodeURIComponent(q)}`,{signal:ac.signal});
-    if(ac!==searchAbort)return;searchAbort=null;
-    S.search={q};S.entries=d.entries;S.sel.clear();
-    si.innerHTML=`<span>🔍 <b>${d.entries.length.toLocaleString()}</b> result(s) for “${esc(q)}” in <b>${esc(S.path)}</b></span>
-      <span class="n">${d.scanned.toLocaleString()} items scanned · ${(d.elapsedMs/1000).toFixed(1)}s</span>
-      ${d.truncated?'<span class="w">result limit reached — refine the search</span>':''}${d.timedOut?'<span class="w">time limit reached — results may be incomplete</span>':''}
-      <button id="bSx">✕ Clear search</button>`;
-    $('#bSx').onclick=clearSearch;renderList()}
-  catch(e){if(e.name==='AbortError')return;si.innerHTML=`🔍 ${esc(e.message)} <button id="bSx">✕</button>`;$('#bSx').onclick=clearSearch}}
+  const si=$('#sinfo'),where=S.path,t0=Date.now();si.classList.add('show');
+  S.search={q,running:true};S.entries=[];S.sel.clear();updSel();renderList();
+  let st={scanned:0,dirs:0,found:0,ms:0,dir:''},stopped=false,lastRender=0;
+  const show=(fin)=>{const secs=((fin?st.ms:Date.now()-t0)/1000).toFixed(1);
+    si.innerHTML=fin
+      ?`<span>🔍 <b>${S.entries.length.toLocaleString()}</b> result(s) for “${esc(q)}” in <b>${esc(where)}</b></span>
+        <span class="n">${st.scanned.toLocaleString()} items · ${st.dirs.toLocaleString()} folders scanned · ${secs}s</span>
+        ${st.truncated?'<span class="w">result limit reached — refine the search</span>':''}${st.timedOut?'<span class="w">time limit reached — results may be incomplete</span>':''}${stopped?'<span class="w">stopped — results may be incomplete</span>':''}
+        <button id="bSx">✕ Clear search</button>`
+      :`<span class="spin"></span><span>Searching “${esc(q)}” in <b>${esc(where)}</b> — <b>${S.entries.length.toLocaleString()}</b> found</span>
+        <span class="n">${st.scanned.toLocaleString()} items · ${st.dirs.toLocaleString()} folders · ${secs}s</span>
+        <span class="n cur" title="${esc(st.dir)}">📂 ${esc(st.dir?'/'+st.dir:where)}</span>
+        <button id="bSstop">■ Stop</button>`;
+    const x=$('#bSx');if(x)x.onclick=clearSearch;
+    const sp=$('#bSstop');if(sp)sp.onclick=()=>{stopped=true;ac.abort()}};
+  const finish=()=>{if(ac!==searchAbort&&!stopped)return;searchAbort=null;S.search={q};show(true);renderList()};
+  show(false);
+  try{
+    const r=await fetch(`/api/search?root=${S.root}&path=${encodeURIComponent(where)}&q=${encodeURIComponent(q)}&stream=1`,{signal:ac.signal});
+    if(r.status===401){toLogin();return}
+    if(!r.ok){let m=r.statusText;try{m=(await r.json()).error||m}catch{}throw new Error(m)}
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+    for(;;){const {value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+      let i;while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;
+        const m=JSON.parse(line);
+        if(m.t==='r'){S.entries.push(...m.entries)}
+        else if(m.t==='p'){st={...st,...m}}
+        else if(m.t==='end'){st={...st,...m};finish();return}
+        else if(m.t==='err')throw new Error(m.error)}
+      if(ac!==searchAbort)return;
+      show(false);const now=Date.now();if(now-lastRender>700){lastRender=now;renderList()}}
+    finish()}
+  catch(e){if(e.name==='AbortError'){if(stopped){st.ms=Date.now()-t0;finish()}return}
+    if(ac===searchAbort)searchAbort=null;S.search={q};si.innerHTML=`🔍 ${esc(e.message)} <button id="bSx">✕</button>`;$('#bSx').onclick=clearSearch;renderList()}}
 function clearSearch(){endSearch();load()}
 $('#fSearch').onsubmit=ev=>{ev.preventDefault();$('#q').value.trim()?doSearch():clearSearch()};
 $('#q').addEventListener('keydown',ev=>{if(ev.key==='Escape')clearSearch()});
