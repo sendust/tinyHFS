@@ -735,10 +735,9 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 	disp := "attachment"
 	if q.Get("inline") == "1" {
 		disp = "inline"
-		// opened directly in a tab or the preview iframe (SVG, HTML): never let the file run scripts on
-		// our origin. PDF is exempt: browsers refuse to show PDFs in sandboxed documents, and the PDF
-		// viewer does not run the file's content as page script.
-		if !strings.EqualFold(filepath.Ext(name), ".pdf") {
+		// opened directly in a tab or the preview iframe (SVG, HTML, ...): never let the file run
+		// scripts on our origin. Media / images / PDF are exempt (see inlineNeedsSandbox).
+		if inlineNeedsSandbox(name) {
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; sandbox")
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -1010,6 +1009,22 @@ type nicIP struct{ nic, ip string }
 func hostName() string {
 	h, _ := os.Hostname()
 	return h
+}
+
+// inlineNeedsSandbox: only types that can run script when opened as a page get the sandbox CSP.
+// Video/audio/raster images/PDF are exempt: Chrome's built-in media and PDF viewers break
+// inside a sandboxed document (e.g. "open original in a new tab" shows nothing).
+func inlineNeedsSandbox(name string) bool {
+	ct, _, _ := strings.Cut(mime.TypeByExtension(strings.ToLower(filepath.Ext(name))), ";")
+	switch {
+	case strings.HasPrefix(ct, "video/"), strings.HasPrefix(ct, "audio/"):
+		return false
+	case strings.HasPrefix(ct, "image/") && ct != "image/svg+xml":
+		return false
+	case ct == "application/pdf":
+		return false
+	}
+	return true
 }
 
 // consistent Content-Type for inline preview (OS mime tables differ, esp. on Windows)
