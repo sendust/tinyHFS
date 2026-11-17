@@ -105,6 +105,29 @@ body.split #xfer{right:var(--pw,50vw)}
 #pv .pb.k-img img,#pv .pb.k-video video,#pv .pb.k-audio audio{display:block}
 #pv .pb.k-audio,#pv .pb.k-video{background:var(--bg)}
 #pv .pb pre,#pv .pb iframe{display:none;margin:0;border:0;width:100%;height:100%}
+#pv .pb .md{display:none}
+#pv .pb.k-md .md{display:block;overflow:auto;width:100%;height:100%;padding:14px 22px 40px}
+#pv .pb.k-md{padding:0;align-items:stretch;background:var(--panel)}
+.md{font-size:14.5px;line-height:1.65;word-wrap:break-word}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{margin:1.2em 0 .5em;line-height:1.3}
+.md h1{font-size:1.8em;border-bottom:1px solid var(--line);padding-bottom:.25em}
+.md h2{font-size:1.45em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+.md h3{font-size:1.2em}.md h4{font-size:1.05em}.md h5,.md h6{font-size:.95em;color:var(--muted)}
+.md>:first-child{margin-top:0}
+.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:0 0 .9em}
+.md ul,.md ol{padding-left:1.8em}
+.md li>p{margin:0 0 .4em}
+.md li.task{list-style:none;margin-left:-1.4em}
+.md code{font:12.5px ui-monospace,Consolas,"D2Coding",monospace;background:var(--hl);padding:1px 5px;border-radius:4px}
+.md pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;overflow:auto}
+.md pre code{background:none;padding:0;font-size:12.5px;line-height:1.5}
+.md blockquote{border-left:4px solid var(--line);margin-left:0;padding:.1em 1em;color:var(--muted)}
+.md table{border-collapse:collapse;display:block;overflow:auto;max-width:100%;border:0;border-radius:0}
+.md th,.md td{border:1px solid var(--line);padding:5px 10px;white-space:normal;color:var(--fg);font-size:13.5px;cursor:auto}
+.md th{background:var(--bg);font-weight:600}
+.md img{max-width:100%}
+.md hr{border:0;border-top:1px solid var(--line);margin:1.4em 0}
+.md a{color:var(--acc)}
 #pv .pb.k-text,#pv .pb.k-html,#pv .pb.k-pdf{padding:0;align-items:stretch;background:var(--panel)}
 #pv .pb.k-text pre{display:block;overflow:auto;padding:10px 12px;font:12.5px/1.5 ui-monospace,Consolas,"D2Coding",monospace;white-space:pre;tab-size:4;color:var(--fg)}
 #pv .pb.k-text.wrap pre{white-space:pre-wrap;word-break:break-all}
@@ -113,7 +136,7 @@ body.split #xfer{right:var(--pw,50vw)}
 #pv .pb.k-text .pmsg,#pv .pb.k-html .pmsg,#pv .pb.k-pdf .pmsg{top:8px;right:14px}
 #pv .ph .on{background:var(--hl);border-color:var(--acc)}
 #pvWrap,#pvSrc{display:none}
-#pv.t-text #pvWrap,#pv.t-html #pvSrc{display:inline-block}
+#pv.t-text #pvWrap,#pv.t-html #pvSrc,#pv.t-md #pvSrc{display:inline-block}
 #pv .pmsg{position:absolute;color:var(--muted);background:var(--panel);padding:4px 10px;border-radius:5px}
 #pv .grip{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:1}
 #pv .grip:hover,#pv.drag .grip{background:var(--acc);opacity:.35}
@@ -183,7 +206,7 @@ tbody tr.pvcur td.name{font-weight:600}
     <button id="pvDl" title="Download">⬇</button>
     <button id="pvX" title="Close (Esc)">✕</button>
   </div>
-  <div class="pb" id="pvBody"><img id="pvImg" alt=""><video id="pvVid" controls playsinline preload="metadata"></video><audio id="pvAud" controls preload="metadata"></audio><pre id="pvTxt"></pre><iframe id="pvFrm" title="preview"></iframe><span class="pmsg" id="pvMsg"></span></div>
+  <div class="pb" id="pvBody"><img id="pvImg" alt=""><video id="pvVid" controls playsinline preload="metadata"></video><audio id="pvAud" controls preload="metadata"></audio><pre id="pvTxt"></pre><div id="pvMd" class="md"></div><iframe id="pvFrm" title="preview"></iframe><span class="pmsg" id="pvMsg"></span></div>
 </div>
 <div id="drop">Drop files or folders to upload</div>
 <div id="xfer" class="hide">
@@ -257,7 +280,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
       tr.onclick=()=>toast('Permission denied: '+bn);tb.appendChild(tr);continue}
     const p=joinP(S.path,e.name),bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);
     tr.innerHTML=`<td class="ck"><input type="checkbox" ${S.sel.has(e.name)?'checked':''}></td>
-      <td class="name"><span class="ico">${e.dir?'📁':({img:'🖼',video:'🎬',audio:'🎵',text:'📝',html:'🌐',pdf:'📕'}[pvKind(bn)]||'📄')}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
+      <td class="name"><span class="ico">${e.dir?'📁':({img:'🖼',video:'🎬',audio:'🎵',text:'📝',md:'📘',html:'🌐',pdf:'📕'}[pvKind(bn)]||'📄')}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
       <td class="num">${e.dir?'':fmtSize(e.size)}</td><td class="num">${fmtDate(e.mtime)}</td>
       <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
     tr.querySelector('input').onchange=ev=>{ev.target.checked?S.sel.add(e.name):S.sel.delete(e.name);tr.classList.toggle('sel',ev.target.checked);updSel()};
@@ -375,7 +398,8 @@ const PV_RE={img:/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i,
   audio:/\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i,
   html:/\.(html?|xhtml)$/i,
   pdf:/\.pdf$/i,
-  text:/\.(txt|text|log|md|markdown|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|conf|cfg|config|properties|env|sh|bash|zsh|bat|cmd|ps1|py|go|mod|sum|js|mjs|ts|tsx|jsx|css|scss|less|c|h|cc|cpp|hpp|cs|java|kt|rs|rb|php|pl|lua|sql|r|swift|srt|vtt|ass|smi|nfo|diff|patch|gitignore|dockerfile|makefile|cue|m3u8?|reg|inf)$/i};
+  md:/\.(md|markdown|mdown|mkd)$/i,
+  text:/\.(txt|text|log|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|conf|cfg|config|properties|env|sh|bash|zsh|bat|cmd|ps1|py|go|mod|sum|js|mjs|ts|tsx|jsx|css|scss|less|c|h|cc|cpp|hpp|cs|java|kt|rs|rb|php|pl|lua|sql|r|swift|srt|vtt|ass|smi|nfo|diff|patch|gitignore|dockerfile|makefile|cue|m3u8?|reg|inf)$/i};
 const TXT_MAX=2*1024*1024; // text preview reads at most the first 2 MB
 const pvOpt={wrap:true,src:false};try{const o=JSON.parse(localStorage.getItem('tinyhfs.pvopt')||'{}');if(typeof o.wrap==='boolean')pvOpt.wrap=o.wrap}catch{}
 let pvAbort=null;
@@ -391,14 +415,89 @@ function pvURL(root,p){return dlURL(root,p)+'?inline=1'}
 function fmtDur(t){if(!isFinite(t))return '';t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+p2(m):m)+':'+p2(s)}
 function openPv(p){PV.root=S.root;PV.list=sorted().filter(e=>!e.dir&&!e.denied&&pvKind(e.name)).map(e=>({p:joinP(S.path,e.name),name:base(e.name),size:e.size,kind:pvKind(e.name)}));
   PV.i=Math.max(0,PV.list.findIndex(x=>x.p===p));PV.open=true;document.body.classList.add('split');showPv()}
-function stopMedia(){if(pvAbort){pvAbort.abort();pvAbort=null}$('#pvTxt').textContent='';const f=$('#pvFrm');f.onload=null;if(f.getAttribute('src')&&f.getAttribute('src')!=='about:blank')f.src='about:blank';for(const m of [$('#pvVid'),$('#pvAud')]){m.pause();if(m.hasAttribute('src')){m.removeAttribute('src');m.load()}}}
+// ---------- minimal markdown renderer (CommonMark subset + GFM tables / task lists / strikethrough)
+// all text is HTML-escaped first: raw HTML in the file is shown as text, never executed
+function mdRender(src,root,baseDir){
+  const unesc=s=>s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
+  const slugs={};const slug=t=>{let b=t.toLowerCase().replace(/<[^>]+>/g,'').replace(/&[a-z#0-9]+;/g,'').trim().replace(/[^\p{L}\p{N}\s_-]/gu,'').replace(/\s+/g,'-')||'h';
+    if(slugs[b]!=null){slugs[b]++;b+='-'+slugs[b]}else slugs[b]=0;return b};
+  // url: http(s)/mailto as is, #anchor in page, relative paths -> file on this server; anything else dropped
+  const url=(raw,img)=>{let u=unesc(raw).trim().replace(/^<|>$/g,'');
+    if(/^(https?:|mailto:)/i.test(u))return {href:u};
+    if(u.startsWith('#'))return {anchor:u.slice(1)};
+    if(/^[a-z][a-z0-9+.-]*:/i.test(u)||u.startsWith('//'))return null;
+    u=u.replace(/[?#].*$/,'');try{u=decodeURIComponent(u)}catch{}
+    const segs=[];for(const s of (u.startsWith('/')?u:baseDir+'/'+u).split('/')){if(!s||s==='.')continue;if(s==='..')segs.pop();else segs.push(s)}
+    return {href:pvURL(root,'/'+segs.join('/')),local:true}};
+  const inline=t=>{const ph=[];const keep=h=>'\u0000'+(ph.push(h)-1)+'\u0000';
+    t=esc(t);
+    t=t.replace(/(`+)([\s\S]*?[^`])\1(?!`)/g,(m,a,c)=>keep(`<code>${c.trim()}</code>`));
+    t=t.replace(/\\([\\`*_{}\[\]()#+\-.!~|>])/g,(m,c)=>keep(c));
+    t=t.replace(/!\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+&quot;[^&]*&quot;)?\s*\)/g,(m,alt,u)=>{const r=url(u,true);return r&&r.href?keep(`<img alt="${alt}" src="${esc(r.href)}" loading="lazy">`):alt});
+    t=t.replace(/\[([^\]]+)\]\(\s*([^\s)]+)(?:\s+&quot;[^&]*&quot;)?\s*\)/g,(m,txt,u)=>{const r=url(u);if(!r)return txt;
+      if(r.anchor!=null)return keep(`<a href="#" data-anchor="${esc(slug2(r.anchor))}">`)+txt+keep('</a>');
+      return keep(`<a href="${esc(r.href)}" target="_blank" rel="noopener noreferrer">`)+txt+keep('</a>')});
+    t=t.replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g,(m,u)=>keep(`<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`));
+    t=t.replace(/(^|[\s(])(https?:\/\/[^\s<\u0000]+[^\s<.,;:!?)\u0000])/g,(m,p,u)=>p+keep(`<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`));
+    t=t.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g,'<strong>$2</strong>');
+    t=t.replace(/(^|[^\w*])\*(?=\S)([^*]*?\S)\*(?!\*)/g,'$1<em>$2</em>').replace(/(^|[^\w_])_(?=\S)([^_]*?\S)_(?!\w)/g,'$1<em>$2</em>');
+    t=t.replace(/~~(?=\S)([\s\S]*?\S)~~/g,'<del>$1</del>');
+    t=t.replace(/( {2,}|\\)\n/g,'<br>');
+    return t.replace(/\u0000(\d+)\u0000/g,(m,i)=>ph[i])};
+  const slug2=a=>{try{a=decodeURIComponent(a)}catch{}return a.toLowerCase()};
+  const isHr=l=>/^ {0,3}([-*_])( *\1){2,} *$/.test(l);
+  const listRe=/^( {0,3})([-*+]|\d{1,9}[.)])( +|$)/;
+  const tblSep=l=>/^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(l)&&l.includes('-');
+  const cells=l=>{l=l.trim().replace(/^\||\|$/g,'');const out=[];let cur='';for(let i=0;i<l.length;i++){if(l[i]==='\\'&&l[i+1]==='|'){cur+='|';i++}else if(l[i]==='|'){out.push(cur);cur=''}else cur+=l[i]}out.push(cur);return out.map(c=>c.trim())};
+  const startsBlock=(l,n)=>/^ {0,3}(#{1,6}(\s|$)|```|~~~|>)/.test(l)||isHr(l)||listRe.test(l)||(l.includes('|')&&n!=null&&tblSep(n));
+  const blocks=lines=>{let out='',i=0;
+    while(i<lines.length){const l=lines[i];
+      if(!l.trim()){i++;continue}
+      let m;
+      if((m=l.match(/^ {0,3}(`{3,}|~{3,})\s*([\w+#.-]*)/))){const f=m[1];const body=[];i++;
+        while(i<lines.length&&!lines[i].trimStart().startsWith(f))body.push(lines[i++]);i++;
+        out+=`<pre><code${m[2]?` class="lang-${esc(m[2])}"`:''}>${esc(body.join('\n'))}</code></pre>`;continue}
+      if((m=l.match(/^ {0,3}(#{1,6})(?:\s+(.*?))?(?:\s+#+)?\s*$/))){m[2]=m[2]||'';const h=inline(m[2]);out+=`<h${m[1].length} id="md-${esc(slug(h))}">${h}</h${m[1].length}>`;i++;continue}
+      if(isHr(l)){out+='<hr>';i++;continue}
+      if(l.includes('|')&&i+1<lines.length&&tblSep(lines[i+1])){const hd=cells(l),al=cells(lines[i+1]).map(c=>c.startsWith(':')&&c.endsWith(':')?'center':c.endsWith(':')?'right':'');i+=2;
+        let h='<table><thead><tr>'+hd.map((c,k)=>`<th${al[k]?` style="text-align:${al[k]}"`:''}>${inline(c)}</th>`).join('')+'</tr></thead><tbody>';
+        while(i<lines.length&&lines[i].trim()&&lines[i].includes('|')){const r=cells(lines[i++]);h+='<tr>'+hd.map((_,k)=>`<td${al[k]?` style="text-align:${al[k]}"`:''}>${inline(r[k]||'')}</td>`).join('')+'</tr>'}
+        out+=h+'</tbody></table>';continue}
+      if(/^ {0,3}>/.test(l)){const q=[];while(i<lines.length&&lines[i].trim()&&(/^ {0,3}>/.test(lines[i])||!startsBlock(lines[i])))q.push(lines[i++].replace(/^ {0,3}> ?/,''));out+=`<blockquote>${blocks(q)}</blockquote>`;continue}
+      if((m=l.match(listRe))){const ordered=/\d/.test(m[2]);const start=ordered?parseInt(m[2]):1;let items=[],cur=null,loose=false,gap=false;
+        while(i<lines.length){const x=lines[i];if(isHr(x))break;const mm=x.match(listRe);
+          if(mm&&/\d/.test(mm[2])===ordered&&mm[1].length<=m[1].length+1){if(cur)items.push(cur);if(gap&&cur)loose=true;gap=false;cur={ind:mm[0].length,lines:[x.slice(mm[0].length)]};i++;continue}
+          if(!x.trim()){gap=true;i++;continue}
+          const ind=x.match(/^ */)[0].length;
+          if(ind>=Math.min(cur.ind,m[1].length+2)){if(gap)cur.lines.push('');gap=false;cur.lines.push(x.slice(Math.min(ind,cur.ind)));i++;continue}
+          if(!gap&&!startsBlock(x)){cur.lines.push(x);i++;continue}
+          break}
+        if(cur)items.push(cur);
+        const tag=ordered?'ol':'ul';out+=`<${tag}${ordered&&start!==1?` start="${start}"`:''}>`;
+        for(const it of items){let first=it.lines[0],cls='';const tk=first.match(/^\[([ xX])\]\s+/);
+          if(tk){first=first.slice(tk[0].length);cls=' class="task"';it.lines[0]=(tk[1]===' '?'☐ ':'☑ ')+first}
+          let h=blocks(it.lines);if(!loose)h=h.replace(/^<p>([\s\S]*?)<\/p>/,'$1');out+=`<li${cls}>${h}</li>`}
+        out+=`</${tag}>`;continue}
+      const para=[];let setext=0;
+      while(i<lines.length&&lines[i].trim()){
+        if(para.length&&/^ {0,3}=+\s*$/.test(lines[i])){setext=1;i++;break}
+        if(para.length&&/^ {0,3}-+\s*$/.test(lines[i])){setext=2;i++;break}
+        if(startsBlock(lines[i],lines[i+1]))break;
+        para.push(lines[i++])}
+      if(!para.length){out+=`<p>${inline(lines[i++])}</p>`;continue}
+      const pt=inline(para.join('\n').replace(/^ +/gm,''));
+      out+=setext?`<h${setext} id="md-${esc(slug(pt))}">${pt}</h${setext}>`:`<p>${pt}</p>`}
+    return out};
+  return blocks(src.replace(/\r\n?/g,'\n').replace(/\t/g,'    ').split('\n'))}
+
+function stopMedia(){if(pvAbort){pvAbort.abort();pvAbort=null}$('#pvTxt').textContent='';$('#pvMd').innerHTML='';const f=$('#pvFrm');f.onload=null;if(f.getAttribute('src')&&f.getAttribute('src')!=='about:blank')f.src='about:blank';for(const m of [$('#pvVid'),$('#pvAud')]){m.pause();if(m.hasAttribute('src')){m.removeAttribute('src');m.load()}}}
 function showPv(){const it=PV.list[PV.i];if(!it)return closePv();
   const body=$('#pvBody'),msg=$('#pvMsg'),url=pvURL(PV.root,it.p),pos=`${PV.i+1} / ${PV.list.length}`,info=t=>$('#pvInfo').textContent=[pos,t,fmtSize(it.size)].filter(Boolean).join(' · ');
   $('#pvName').textContent=it.name;$('#pvName').parentNode.title=it.p;info('');
   $('#pvOpen').href=url;$('#pvPrev').disabled=PV.i<=0;$('#pvNext').disabled=PV.i>=PV.list.length-1;
   stopMedia();const img=$('#pvImg');img.onload=img.onerror=null;img.removeAttribute('src');
-  const kind=it.kind==='html'&&pvOpt.src?'text':it.kind;
-  body.className='pb k-'+kind+(pvOpt.wrap?' wrap':'');$('#pv').className='t-'+kind+(it.kind==='html'?' t-html':'');msg.textContent='Loading…';msg.style.display='';
+  const kind=(it.kind==='html'||it.kind==='md')&&pvOpt.src?'text':it.kind;
+  body.className='pb k-'+kind+(pvOpt.wrap?' wrap':'');$('#pv').className='t-'+kind+(it.kind==='html'||it.kind==='md'?' t-'+it.kind:'');msg.textContent='Loading…';msg.style.display='';
   $('#pvWrap').classList.toggle('on',pvOpt.wrap);$('#pvSrc').classList.toggle('on',pvOpt.src);
   const fail=t=>{body.className='pb';msg.textContent=t;msg.style.display=''};
   if(it.kind==='img'){
@@ -406,13 +505,15 @@ function showPv(){const it=PV.list[PV.i];if(!it)return closePv();
     img.onerror=()=>fail('Cannot display this image in the browser');
     img.src=url;
     const nx=PV.list[PV.i+1];if(nx&&nx.kind==='img'){const pre=new Image();pre.src=pvURL(PV.root,nx.p)}
-  }else if(kind==='text'){
+  }else if(kind==='text'||kind==='md'){
     const ac=new AbortController();pvAbort=ac;
     fetch(url,{headers:{Range:'bytes=0-'+(TXT_MAX-1)},signal:ac.signal}).then(async r=>{
       if(r.status===401){toLogin();return}
       if(!r.ok&&r.status!==206)throw new Error(r.status+' '+r.statusText);
       const buf=await r.arrayBuffer(),trunc=it.size>buf.byteLength;if(ac.signal.aborted)return;
-      const txt=decodeText(buf,trunc);$('#pvTxt').textContent=txt;$('#pvTxt').scrollTop=0;
+      const txt=decodeText(buf,trunc);
+      if(kind==='md'){const d=$('#pvMd');d.innerHTML=mdRender(txt,PV.root,it.p.replace(/\/[^/]*$/,'')||'/');d.scrollTop=0}
+      else{$('#pvTxt').textContent=txt;$('#pvTxt').scrollTop=0}
       const lines=(txt.match(/\n/g)||[]).length+1;info(`${lines.toLocaleString()} lines`+(trunc?` · first ${fmtSize(buf.byteLength)} shown`:''));
       if(trunc){msg.textContent=`Showing the first ${fmtSize(buf.byteLength)} — use ⬇ for the whole file`}else msg.style.display='none'
     }).catch(e=>{if(e.name!=='AbortError')fail('Cannot load: '+e.message)});
@@ -433,6 +534,9 @@ function stepPv(d){const n=PV.i+d;if(n<0||n>=PV.list.length)return;PV.i=n;showPv
 function closePv(){PV.open=false;document.body.classList.remove('split');stopMedia();$('#pvImg').removeAttribute('src');document.querySelectorAll('#list tr.pvcur').forEach(t=>t.classList.remove('pvcur'))}
 $('#pvPrev').onclick=()=>stepPv(-1);$('#pvNext').onclick=()=>stepPv(1);$('#pvX').onclick=closePv;
 $('#pvWrap').onclick=()=>{pvOpt.wrap=!pvOpt.wrap;try{localStorage.setItem('tinyhfs.pvopt',JSON.stringify({wrap:pvOpt.wrap}))}catch{}$('#pvBody').classList.toggle('wrap',pvOpt.wrap);$('#pvWrap').classList.toggle('on',pvOpt.wrap)};
+// in-page anchors (#heading) must not touch location.hash (used for folder routing)
+$('#pvMd').addEventListener('click',ev=>{const a=ev.target.closest('a[data-anchor]');if(!a)return;ev.preventDefault();
+  const t=document.getElementById('md-'+a.dataset.anchor);if(t)t.scrollIntoView({behavior:'smooth',block:'start'})});
 $('#pvSrc').onclick=()=>{pvOpt.src=!pvOpt.src;showPv()};
 $('#pvDl').onclick=()=>{const it=PV.list[PV.i];if(it)downloadFile(PV.root,it.p,it.name,it.size)};
 $('#pvBody').onclick=ev=>{if(ev.target.id==='pvBody')closePv()};
