@@ -406,7 +406,7 @@ const PV_RE={img:/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i,
   html:/\.(html?|xhtml)$/i,
   pdf:/\.pdf$/i,
   md:/\.(md|markdown|mdown|mkd)$/i,
-  text:/\.(txt|text|log|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|conf|cfg|config|properties|env|sh|bash|zsh|bat|cmd|ps1|py|go|mod|sum|js|mjs|ts|tsx|jsx|css|scss|less|c|h|cc|cpp|hpp|cs|java|kt|rs|rb|php|pl|lua|sql|r|swift|srt|vtt|ass|smi|nfo|diff|patch|gitignore|dockerfile|makefile|cue|m3u8?|reg|inf)$/i};
+  text:/\.(txt|text|log|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|conf|cfg|config|properties|env|sh|bash|zsh|bat|cmd|ps1|py|go|mod|sum|js|mjs|jsx|css|scss|less|c|h|cc|cpp|hpp|cs|java|kt|rs|rb|php|pl|lua|sql|r|swift|srt|vtt|ass|smi|nfo|diff|patch|gitignore|dockerfile|makefile|cue|m3u8?|reg|inf)$/i};
 const TXT_MAX=2*1024*1024; // text preview reads at most the first 2 MB
 const pvOpt={wrap:true,src:false};try{const o=JSON.parse(localStorage.getItem('tinyhfs.pvopt')||'{}');if(typeof o.wrap==='boolean')pvOpt.wrap=o.wrap}catch{}
 let pvAbort=null;
