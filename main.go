@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -48,6 +49,26 @@ type entry struct {
 	Dir   bool   `json:"dir"`
 	Size  int64  `json:"size"`
 	MTime int64  `json:"mtime"`
+	// Denied: the name is listed but the file cannot be accessed (e.g. folder without x permission)
+	Denied bool `json:"denied,omitempty"`
+}
+
+// warnDenied logs inaccessible paths, at most once per folder every 10 minutes
+// (the UI polls/refreshes the same folder often).
+var deniedLogged sync.Map // folder -> time.Time
+
+func warnDenied(dir string, n int, example string, err error) {
+	now := time.Now()
+	key := fmt.Sprint(dir, "|", n == 0)
+	if t, ok := deniedLogged.Load(key); ok && now.Sub(t.(time.Time)) < 10*time.Minute {
+		return
+	}
+	deniedLogged.Store(key, now)
+	if n == 0 {
+		logger.Printf("WARN cannot read folder %s: %v (check permissions: folders need r+x for the tinyHFS user)", dir, err)
+		return
+	}
+	logger.Printf("WARN %s: %d entries not accessible, e.g. %q: %v (folders need r+x for the tinyHFS user)", dir, n, example, err)
 }
 
 type Root struct {
@@ -481,10 +502,17 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 	}
 	des, err := os.ReadDir(full)
 	if err != nil {
-		pathErr(w, err)
-		return
+		if errors.Is(err, fs.ErrPermission) {
+			warnDenied(full, 0, "", err)
+		}
+		if len(des) == 0 {
+			pathErr(w, err)
+			return
+		}
 	}
 	list := make([]entry, 0, len(des))
+	denied, firstDenied := 0, ""
+	var deniedErr error
 	for _, de := range des {
 		name := de.Name()
 		if strings.HasSuffix(name, partSuffix) {
@@ -492,7 +520,17 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		}
 		fi, err := os.Stat(filepath.Join(full, name)) // follow symlinks
 		if err != nil {
-			if fi, err = de.Info(); err != nil {
+			var lerr error
+			if fi, lerr = de.Info(); lerr != nil {
+				if errors.Is(lerr, fs.ErrNotExist) {
+					continue // removed while listing
+				}
+				// name is readable but the file is not: still show it
+				if denied == 0 {
+					firstDenied, deniedErr = name, lerr
+				}
+				denied++
+				list = append(list, entry{Name: name, Dir: de.IsDir(), Size: -1, Denied: true})
 				continue
 			}
 		}
@@ -501,6 +539,9 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 			e.Size = fi.Size()
 		}
 		list = append(list, e)
+	}
+	if denied > 0 {
+		warnDenied(full, denied, firstDenied, deniedErr)
 	}
 	free, total := diskUsage(full)
 	writeJSON(w, 200, map[string]any{"path": clean, "free": free, "total": total, "entries": list})
@@ -694,8 +735,12 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 	disp := "attachment"
 	if q.Get("inline") == "1" {
 		disp = "inline"
-		// opened directly in a tab (e.g. an SVG): never let the file run scripts on our origin
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox")
+		// opened directly in a tab or the preview iframe (SVG, HTML): never let the file run scripts on
+		// our origin. PDF is exempt: browsers refuse to show PDFs in sandboxed documents, and the PDF
+		// viewer does not run the file's content as page script.
+		if !strings.EqualFold(filepath.Ext(name), ".pdf") {
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; sandbox")
+		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 	} else {
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -962,6 +1007,20 @@ type nicIP struct{ nic, ip string }
 func hostName() string {
 	h, _ := os.Hostname()
 	return h
+}
+
+// consistent Content-Type for inline preview (OS mime tables differ, esp. on Windows)
+func init() {
+	for ext, typ := range map[string]string{
+		".mp4": "video/mp4", ".m4v": "video/mp4", ".webm": "video/webm", ".ogv": "video/ogg",
+		".mov": "video/quicktime", ".mkv": "video/x-matroska",
+		".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav",
+		".flac": "audio/flac", ".ogg": "audio/ogg", ".oga": "audio/ogg", ".opus": "audio/ogg", ".weba": "audio/webm",
+		".md": "text/plain; charset=utf-8", ".log": "text/plain", ".pdf": "application/pdf",
+		".webp": "image/webp", ".avif": "image/avif", ".svg": "image/svg+xml", ".jfif": "image/jpeg", ".apng": "image/apng",
+	} {
+		mime.AddExtensionType(ext, typ)
+	}
 }
 
 var listenPort int // port actually bound (shown in the web UI)

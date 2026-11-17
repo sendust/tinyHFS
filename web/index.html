@@ -82,6 +82,9 @@ tr.up .name{color:var(--acc);font-weight:600}
 #sinfo .n{color:var(--muted)}
 #sinfo .w{color:var(--warn)}
 .name .dirpart{color:var(--muted)}
+tbody tr.denied td{color:var(--muted)}
+tbody tr.denied td.name{font-style:italic}
+td.warn{background:color-mix(in srgb,var(--warn) 12%,var(--panel));color:var(--warn);font-size:12.5px;white-space:normal}
 /* image preview: right half of the window */
 #pv{position:fixed;top:0;right:0;bottom:0;width:var(--pw,50vw);background:var(--panel);border-left:1px solid var(--line);z-index:6;display:none;flex-direction:column}
 body.split #pv{display:flex}
@@ -95,7 +98,22 @@ body.split #xfer{right:var(--pw,50vw)}
 #pv .ph a.btn{font-size:13px;border:1px solid var(--line);border-radius:6px;color:var(--fg);text-decoration:none}
 #pv .ph a.btn:hover{border-color:var(--acc)}
 #pv .pb{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px;position:relative;background:repeating-conic-gradient(var(--line) 0 25%,transparent 0 50%) 0 0/20px 20px}
-#pv .pb img{max-width:100%;max-height:100%;object-fit:contain;display:block;box-shadow:0 1px 8px rgba(0,0,0,.25)}
+#pv .pb img,#pv .pb video{max-width:100%;max-height:100%;object-fit:contain;display:block;box-shadow:0 1px 8px rgba(0,0,0,.25)}
+#pv .pb video{background:#000}
+#pv .pb audio{width:min(100%,520px)}
+#pv .pb img,#pv .pb video,#pv .pb audio{display:none}
+#pv .pb.k-img img,#pv .pb.k-video video,#pv .pb.k-audio audio{display:block}
+#pv .pb.k-audio,#pv .pb.k-video{background:var(--bg)}
+#pv .pb pre,#pv .pb iframe{display:none;margin:0;border:0;width:100%;height:100%}
+#pv .pb.k-text,#pv .pb.k-html,#pv .pb.k-pdf{padding:0;align-items:stretch;background:var(--panel)}
+#pv .pb.k-text pre{display:block;overflow:auto;padding:10px 12px;font:12.5px/1.5 ui-monospace,Consolas,"D2Coding",monospace;white-space:pre;tab-size:4;color:var(--fg)}
+#pv .pb.k-text.wrap pre{white-space:pre-wrap;word-break:break-all}
+#pv .pb.k-html iframe{display:block;background:#fff}
+#pv .pb.k-pdf iframe{display:block}
+#pv .pb.k-text .pmsg,#pv .pb.k-html .pmsg,#pv .pb.k-pdf .pmsg{top:8px;right:14px}
+#pv .ph .on{background:var(--hl);border-color:var(--acc)}
+#pvWrap,#pvSrc{display:none}
+#pv.t-text #pvWrap,#pv.t-html #pvSrc{display:inline-block}
 #pv .pmsg{position:absolute;color:var(--muted);background:var(--panel);padding:4px 10px;border-radius:5px}
 #pv .grip{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:1}
 #pv .grip:hover,#pv.drag .grip{background:var(--acc);opacity:.35}
@@ -156,14 +174,16 @@ tbody tr.pvcur td.name{font-weight:600}
 <div id="pv">
   <div class="grip" id="pvGrip" title="Drag to resize"></div>
   <div class="ph">
-    <button id="pvPrev" title="Previous image (←)">◀</button>
-    <button id="pvNext" title="Next image (→)">▶</button>
+    <button id="pvPrev" title="Previous (←)">◀</button>
+    <button id="pvNext" title="Next (→)">▶</button>
     <div class="pt"><span id="pvName"></span><small id="pvInfo"></small></div>
     <a class="btn" id="pvOpen" target="_blank" rel="noopener" title="Open original in a new tab">↗</a>
+    <button id="pvWrap" title="Toggle line wrap">↵ Wrap</button>
+    <button id="pvSrc" title="Toggle rendered page / HTML source">&lt;/&gt; Source</button>
     <button id="pvDl" title="Download">⬇</button>
     <button id="pvX" title="Close (Esc)">✕</button>
   </div>
-  <div class="pb" id="pvBody"><img id="pvImg" alt=""><span class="pmsg" id="pvMsg"></span></div>
+  <div class="pb" id="pvBody"><img id="pvImg" alt=""><video id="pvVid" controls playsinline preload="metadata"></video><audio id="pvAud" controls preload="metadata"></audio><pre id="pvTxt"></pre><iframe id="pvFrm" title="preview"></iframe><span class="pmsg" id="pvMsg"></span></div>
 </div>
 <div id="drop">Drop files or folders to upload</div>
 <div id="xfer" class="hide">
@@ -229,16 +249,21 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
   if(S.path!=='/'&&!S.search){const tr=document.createElement('tr');tr.className='up';tr.title='Parent folder';tr.innerHTML=`<td class="ck"></td><td class="name" colspan="4"><span class="ico">↩</span>.. &nbsp;Parent folder</td>`;tr.onclick=goUp;tb.appendChild(tr)}
   const list=sorted();
   if(!list.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="empty">${S.search?'No matches':'Empty folder — drop files here to upload'}</td>`;tb.appendChild(tr)}
+  const nDen=list.filter(e=>e.denied).length;
+  if(nDen){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="warn">🔒 ${nDen} item(s) cannot be accessed (permission denied on the server). Folders need <b>r + x</b> permission for the user running tinyHFS — e.g. <code>sudo chmod -R a+rX &lt;folder&gt;</code></td>`;tb.appendChild(tr)}
   for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';
+    if(e.denied){const bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);tr.className='denied';tr.title='Permission denied — cannot open, size and date unknown';
+      tr.innerHTML=`<td class="ck"><input type="checkbox" disabled></td><td class="name"><span class="ico">🔒</span>${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}${e.dir?'/':''}</td><td class="num">—</td><td class="num">—</td><td class="act"></td>`;
+      tr.onclick=()=>toast('Permission denied: '+bn);tb.appendChild(tr);continue}
     const p=joinP(S.path,e.name),bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);
     tr.innerHTML=`<td class="ck"><input type="checkbox" ${S.sel.has(e.name)?'checked':''}></td>
-      <td class="name"><span class="ico">${e.dir?'📁':'📄'}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
+      <td class="name"><span class="ico">${e.dir?'📁':({img:'🖼',video:'🎬',audio:'🎵',text:'📝',html:'🌐',pdf:'📕'}[pvKind(bn)]||'📄')}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
       <td class="num">${e.dir?'':fmtSize(e.size)}</td><td class="num">${fmtDate(e.mtime)}</td>
       <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
     tr.querySelector('input').onchange=ev=>{ev.target.checked?S.sel.add(e.name):S.sel.delete(e.name);tr.classList.toggle('sel',ev.target.checked);updSel()};
     const a=tr.querySelector('.name a');
-    if(!e.dir)a.onclick=ev=>{ev.preventDefault();isImg(bn)?openPv(p):downloadFile(S.root,p,bn,e.size)};
-    if(!e.dir&&isImg(bn)){tr.dataset.pv=p;if(PV.open&&PV.root===S.root&&PV.list[PV.i]&&PV.list[PV.i].p===p)tr.classList.add('pvcur')}
+    if(!e.dir)a.onclick=ev=>{ev.preventDefault();pvKind(bn)?openPv(p):downloadFile(S.root,p,bn,e.size)};
+    if(!e.dir&&pvKind(bn)){tr.dataset.pv=p;if(PV.open&&PV.root===S.root&&PV.list[PV.i]&&PV.list[PV.i].p===p)tr.classList.add('pvcur')}
     tr.querySelector('.act button').onclick=()=>e.dir?downloadZip(S.root,p,[],bn+'.zip'):downloadFile(S.root,p,bn,e.size);
     // drag out => download (Chromium: DownloadURL)
     tr.draggable=true;
@@ -251,9 +276,9 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
   document.querySelectorAll('th[data-k]').forEach(th=>{const k=th.dataset.k;th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(S.sort.k===k?(S.sort.asc?' ▲':' ▼'):'')});
   updSel()}
 function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
-  $('#bZip').textContent=n?`🗜 Zip selected (${n})`:'🗜 Zip this folder';const all=$('#ckAll');all.checked=n&&n===S.entries.length;all.indeterminate=n>0&&n<S.entries.length}
+  $('#bZip').textContent=n?`🗜 Zip selected (${n})`:'🗜 Zip this folder';const all=$('#ckAll');const tot=S.entries.filter(e=>!e.denied).length;all.checked=n&&n===tot;all.indeterminate=n>0&&n<tot}
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};renderList()});
-$('#ckAll').onchange=ev=>{S.sel=ev.target.checked?new Set(S.entries.map(e=>e.name)):new Set();renderList()};
+$('#ckAll').onchange=ev=>{S.sel=ev.target.checked?new Set(S.entries.filter(e=>!e.denied).map(e=>e.name)):new Set();renderList()};
 
 // ---------- transfers panel
 const X=[];let xseq=0;
@@ -344,26 +369,71 @@ async function poll(){if(!pollSet.size){clearInterval(pollT);pollT=null;return}
     if(p.finished){pollSet.delete(x);x.active=false;if(p.error)x.fail(p.error+(p.error!=='interrupted'&&p.error.indexOf('cancel')<0?'':' — resume in browser downloads'));else x.finish()}
     else if(x.status!=='downloading'&&x.status!=='zipping')x.set(x.kind==='zip'?'zipping':'downloading')}}
 // ---------------------------------------------------------------- image preview
-const IMG_RE=/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i;
-function isImg(n){return IMG_RE.test(n)}
+// kinds the browser can show inline (mxf, avi, wmv... are not playable in browsers)
+const PV_RE={img:/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i,
+  video:/\.(mp4|m4v|webm|ogv|mov|mkv)$/i,
+  audio:/\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i,
+  html:/\.(html?|xhtml)$/i,
+  pdf:/\.pdf$/i,
+  text:/\.(txt|text|log|md|markdown|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|conf|cfg|config|properties|env|sh|bash|zsh|bat|cmd|ps1|py|go|mod|sum|js|mjs|ts|tsx|jsx|css|scss|less|c|h|cc|cpp|hpp|cs|java|kt|rs|rb|php|pl|lua|sql|r|swift|srt|vtt|ass|smi|nfo|diff|patch|gitignore|dockerfile|makefile|cue|m3u8?|reg|inf)$/i};
+const TXT_MAX=2*1024*1024; // text preview reads at most the first 2 MB
+const pvOpt={wrap:true,src:false};try{const o=JSON.parse(localStorage.getItem('tinyhfs.pvopt')||'{}');if(typeof o.wrap==='boolean')pvOpt.wrap=o.wrap}catch{}
+let pvAbort=null;
+// decode text: BOM -> utf-16/utf-8, valid utf-8, else Korean legacy (cp949)
+function decodeText(buf,truncated){const b=new Uint8Array(buf);
+  if(b[0]===0xFF&&b[1]===0xFE)return new TextDecoder('utf-16le').decode(b);
+  if(b[0]===0xFE&&b[1]===0xFF)return new TextDecoder('utf-16be').decode(b);
+  for(let cut=0;cut<=(truncated?3:0);cut++){try{return new TextDecoder('utf-8',{fatal:true}).decode(b.subarray(0,b.length-cut))}catch{}}
+  try{return new TextDecoder('euc-kr').decode(b)}catch{return new TextDecoder('utf-8').decode(b)}}
+function pvKind(n){for(const k in PV_RE)if(PV_RE[k].test(n))return k;return null}
 const PV={open:false,root:0,list:[],i:0};
 function pvURL(root,p){return dlURL(root,p)+'?inline=1'}
-function openPv(p){PV.root=S.root;PV.list=sorted().filter(e=>!e.dir&&isImg(e.name)).map(e=>({p:joinP(S.path,e.name),name:base(e.name),size:e.size,mtime:e.mtime}));
+function fmtDur(t){if(!isFinite(t))return '';t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+p2(m):m)+':'+p2(s)}
+function openPv(p){PV.root=S.root;PV.list=sorted().filter(e=>!e.dir&&!e.denied&&pvKind(e.name)).map(e=>({p:joinP(S.path,e.name),name:base(e.name),size:e.size,kind:pvKind(e.name)}));
   PV.i=Math.max(0,PV.list.findIndex(x=>x.p===p));PV.open=true;document.body.classList.add('split');showPv()}
+function stopMedia(){if(pvAbort){pvAbort.abort();pvAbort=null}$('#pvTxt').textContent='';const f=$('#pvFrm');f.onload=null;if(f.getAttribute('src')&&f.getAttribute('src')!=='about:blank')f.src='about:blank';for(const m of [$('#pvVid'),$('#pvAud')]){m.pause();if(m.hasAttribute('src')){m.removeAttribute('src');m.load()}}}
 function showPv(){const it=PV.list[PV.i];if(!it)return closePv();
-  const img=$('#pvImg'),msg=$('#pvMsg'),url=pvURL(PV.root,it.p);
-  $('#pvName').textContent=it.name;$('#pvName').parentNode.title=it.p;$('#pvInfo').textContent=`${PV.i+1} / ${PV.list.length} · ${fmtSize(it.size)}`;
+  const body=$('#pvBody'),msg=$('#pvMsg'),url=pvURL(PV.root,it.p),pos=`${PV.i+1} / ${PV.list.length}`,info=t=>$('#pvInfo').textContent=[pos,t,fmtSize(it.size)].filter(Boolean).join(' · ');
+  $('#pvName').textContent=it.name;$('#pvName').parentNode.title=it.p;info('');
   $('#pvOpen').href=url;$('#pvPrev').disabled=PV.i<=0;$('#pvNext').disabled=PV.i>=PV.list.length-1;
-  msg.textContent='Loading…';msg.style.display='';img.style.visibility='hidden';
-  img.onload=()=>{msg.style.display='none';img.style.visibility='';if(img.naturalWidth)$('#pvInfo').textContent=`${PV.i+1} / ${PV.list.length} · ${img.naturalWidth} × ${img.naturalHeight} · ${fmtSize(it.size)}`};
-  img.onerror=()=>{img.style.visibility='hidden';msg.textContent='Cannot display this image in the browser';msg.style.display=''};
-  img.src=url;
+  stopMedia();const img=$('#pvImg');img.onload=img.onerror=null;img.removeAttribute('src');
+  const kind=it.kind==='html'&&pvOpt.src?'text':it.kind;
+  body.className='pb k-'+kind+(pvOpt.wrap?' wrap':'');$('#pv').className='t-'+kind+(it.kind==='html'?' t-html':'');msg.textContent='Loading…';msg.style.display='';
+  $('#pvWrap').classList.toggle('on',pvOpt.wrap);$('#pvSrc').classList.toggle('on',pvOpt.src);
+  const fail=t=>{body.className='pb';msg.textContent=t;msg.style.display=''};
+  if(it.kind==='img'){
+    img.onload=()=>{msg.style.display='none';if(img.naturalWidth)info(`${img.naturalWidth} × ${img.naturalHeight}`)};
+    img.onerror=()=>fail('Cannot display this image in the browser');
+    img.src=url;
+    const nx=PV.list[PV.i+1];if(nx&&nx.kind==='img'){const pre=new Image();pre.src=pvURL(PV.root,nx.p)}
+  }else if(kind==='text'){
+    const ac=new AbortController();pvAbort=ac;
+    fetch(url,{headers:{Range:'bytes=0-'+(TXT_MAX-1)},signal:ac.signal}).then(async r=>{
+      if(r.status===401){toLogin();return}
+      if(!r.ok&&r.status!==206)throw new Error(r.status+' '+r.statusText);
+      const buf=await r.arrayBuffer(),trunc=it.size>buf.byteLength;if(ac.signal.aborted)return;
+      const txt=decodeText(buf,trunc);$('#pvTxt').textContent=txt;$('#pvTxt').scrollTop=0;
+      const lines=(txt.match(/\n/g)||[]).length+1;info(`${lines.toLocaleString()} lines`+(trunc?` · first ${fmtSize(buf.byteLength)} shown`:''));
+      if(trunc){msg.textContent=`Showing the first ${fmtSize(buf.byteLength)} — use ⬇ for the whole file`}else msg.style.display='none'
+    }).catch(e=>{if(e.name!=='AbortError')fail('Cannot load: '+e.message)});
+  }else if(kind==='html'||kind==='pdf'){
+    const f=$('#pvFrm');
+    // html: sandboxed (no scripts, isolated origin; the server also sends a sandbox CSP); pdf: browser viewer needs no sandbox
+    if(kind==='html')f.setAttribute('sandbox','');else f.removeAttribute('sandbox');
+    f.onload=()=>{msg.style.display='none'};f.src=url;
+  }else{
+    const m=it.kind==='video'?$('#pvVid'):$('#pvAud');
+    m.onloadedmetadata=()=>{msg.style.display='none';info([it.kind==='video'&&m.videoWidth?`${m.videoWidth} × ${m.videoHeight}`:'',fmtDur(m.duration)].filter(Boolean).join(' · '))};
+    m.onerror=()=>{if(m.hasAttribute('src'))fail('This format / codec cannot be played in the browser — use ⬇ to download')};
+    m.src=url;m.play().catch(()=>{});
+  }
   document.querySelectorAll('#list tr.pvcur').forEach(t=>t.classList.remove('pvcur'));
-  if(PV.root===S.root)for(const t of document.querySelectorAll('#list tr[data-pv]'))if(t.dataset.pv===it.p){t.classList.add('pvcur');t.scrollIntoView({block:'nearest'})}
-  const nx=PV.list[PV.i+1];if(nx){const pre=new Image();pre.src=pvURL(PV.root,nx.p)}}
+  if(PV.root===S.root)for(const t of document.querySelectorAll('#list tr[data-pv]'))if(t.dataset.pv===it.p){t.classList.add('pvcur');t.scrollIntoView({block:'nearest'})}}
 function stepPv(d){const n=PV.i+d;if(n<0||n>=PV.list.length)return;PV.i=n;showPv()}
-function closePv(){PV.open=false;document.body.classList.remove('split');$('#pvImg').removeAttribute('src');document.querySelectorAll('#list tr.pvcur').forEach(t=>t.classList.remove('pvcur'))}
+function closePv(){PV.open=false;document.body.classList.remove('split');stopMedia();$('#pvImg').removeAttribute('src');document.querySelectorAll('#list tr.pvcur').forEach(t=>t.classList.remove('pvcur'))}
 $('#pvPrev').onclick=()=>stepPv(-1);$('#pvNext').onclick=()=>stepPv(1);$('#pvX').onclick=closePv;
+$('#pvWrap').onclick=()=>{pvOpt.wrap=!pvOpt.wrap;try{localStorage.setItem('tinyhfs.pvopt',JSON.stringify({wrap:pvOpt.wrap}))}catch{}$('#pvBody').classList.toggle('wrap',pvOpt.wrap);$('#pvWrap').classList.toggle('on',pvOpt.wrap)};
+$('#pvSrc').onclick=()=>{pvOpt.src=!pvOpt.src;showPv()};
 $('#pvDl').onclick=()=>{const it=PV.list[PV.i];if(it)downloadFile(PV.root,it.p,it.name,it.size)};
 $('#pvBody').onclick=ev=>{if(ev.target.id==='pvBody')closePv()};
 (()=>{let w0=null;try{w0=localStorage.getItem('tinyhfs.pw')}catch{}if(w0)document.documentElement.style.setProperty('--pw',w0);
@@ -371,7 +441,7 @@ $('#pvBody').onclick=ev=>{if(ev.target.id==='pvBody')closePv()};
     const mv=e=>{const w=Math.min(Math.max(window.innerWidth-e.clientX,240),window.innerWidth-240);document.documentElement.style.setProperty('--pw',w+'px')};
     const up=()=>{pv.classList.remove('drag');g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);try{localStorage.setItem('tinyhfs.pw',getComputedStyle(document.documentElement).getPropertyValue('--pw').trim())}catch{}};
     g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up)})})();
-document.addEventListener('keydown',ev=>{if(!PV.open||ev.altKey||ev.ctrlKey||ev.metaKey||/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))return;
+document.addEventListener('keydown',ev=>{const tg=document.activeElement.tagName;if(!PV.open||ev.altKey||ev.ctrlKey||ev.metaKey||/^(INPUT|TEXTAREA|SELECT)$/.test(tg)||(/^(VIDEO|AUDIO)$/.test(tg)&&ev.key!=='Escape'))return;
   if(ev.key==='Escape'){closePv();ev.preventDefault()}else if(ev.key==='ArrowLeft'){stepPv(-1);ev.preventDefault()}else if(ev.key==='ArrowRight'){stepPv(1);ev.preventDefault()}});
 
 function downloadFile(root,p,name,size){nativeDownload(dlURL(root,p),name,'down',size)}
