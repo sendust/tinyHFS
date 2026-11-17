@@ -12,6 +12,7 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--warn:#fbbf24;--warnbg:#2a2213;--code:#11141a;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--warn:#fbbf24;--warnbg:#2a2213;--code:#11141a;color-scheme:dark}
 :root[data-theme="pink"]{--bg:#fff0f6;--panel:#ffffff;--fg:#4a1d35;--muted:#a0607f;--line:#f8c8dc;--acc:#d6336c;--hl:#ffdeeb;--warn:#b45309;--warnbg:#fff4e6;--code:#fdeaf2}
+:root[data-theme="cloudy"]{--bg:#acacae;--panel:#b3b3b3;--fg:#141820;--muted:#3f444d;--line:#9ea0a4;--acc:#1d4ed8;--hl:#a2a7b1;--warn:#7c3a0a;--warnbg:#b3ada1;--code:#a9aaac}
 *{box-sizing:border-box}
 body{margin:0;font:14.5px/1.6 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg)}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -223,9 +224,9 @@ let lang='en';try{lang=localStorage.getItem('tinyhfs-lang')||((navigator.languag
 setLang(lang);
 document.getElementById('lEn').onclick=()=>setLang('en');document.getElementById('lKo').onclick=()=>setLang('ko');
 
-// theme button (light -> dark -> pink), shared by all tinyHFS pages via localStorage
+// theme button (light -> cloudy -> dark -> pink), shared by all tinyHFS pages via localStorage
 (()=>{const r=document.documentElement,b=document.getElementById('thm');if(!b)return;const mq=matchMedia('(prefers-color-scheme: dark)');
-  const T=['light','dark','pink'],ICON={light:'☀️',dark:'🌙',pink:'🌸'},NAME={light:'Light',dark:'Dark',pink:'Pink'};
+  const T=['light','cloudy','dark','pink'],ICON={light:'☀️',cloudy:'☁️',dark:'🌙',pink:'🌸'},NAME={light:'Light',cloudy:'Cloudy',dark:'Dark',pink:'Pink'};
   const eff=()=>T.includes(r.dataset.theme)?r.dataset.theme:(mq.matches?'dark':'light');
   const upd=()=>{const t=eff(),n=T[(T.indexOf(t)+1)%T.length];b.textContent=ICON[t];b.title=`Theme: ${NAME[t]} — click for ${NAME[n]}`};
   b.addEventListener('click',ev=>{ev.preventDefault();const n=T[(T.indexOf(eff())+1)%T.length];r.dataset.theme=n;try{localStorage.setItem('tinyhfs.theme',n)}catch{}upd()});
