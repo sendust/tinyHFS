@@ -6,7 +6,7 @@
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<title>tinyHFS by sendust {{VERSION}}</title>
+<title>tinyHFS [{{HOSTNAME}}]</title>
 <script>try{const t=localStorage.getItem('tinyhfs.theme');if(t)document.documentElement.dataset.theme=t}catch{}</script>
 <style>
 :root{--bg:#f5f6f8;--panel:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e2e5ea;--acc:#2563eb;--hl:#e8effd;--ok:#16a34a;--err:#dc2626;--warn:#b45309}
@@ -316,7 +316,9 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
   updSel()}
 function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bDel').disabled=!n;$('#bDel').textContent=n?`🗑 Delete (${n})`:'🗑 Delete';$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
   $('#bZip').textContent=n?`🗜 Zip selected (${n})`:'🗜 Zip this folder';const all=$('#ckAll');const tot=S.entries.filter(e=>!e.denied).length;all.checked=n&&n===tot;all.indeterminate=n>0&&n<tot}
-document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};renderList()});
+document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};try{localStorage.setItem('tinyhfs.sort',JSON.stringify(S.sort))}catch{}renderList()});
+// restore the sort order chosen earlier (kept across F5 / restarts)
+try{const o=JSON.parse(localStorage.getItem('tinyhfs.sort')||'null');if(o&&['name','size','mtime'].includes(o.k)&&typeof o.asc==='boolean')S.sort={k:o.k,asc:o.asc}}catch{}
 $('#ckAll').onchange=ev=>{S.sel=ev.target.checked?new Set(S.entries.filter(e=>!e.denied).map(e=>e.name)):new Set();renderList()};
 
 // ---------- transfers panel

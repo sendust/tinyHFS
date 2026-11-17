@@ -1160,13 +1160,16 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	indexHTML = []byte(strings.ReplaceAll(string(b), "{{VERSION}}", html.EscapeString(version)))
-	if b, err = webFS.ReadFile("web/login.html"); err != nil {
-		logger.Fatal(err)
-	}
 	host, _ := os.Hostname()
 	if host == "" {
 		host = "unknown host"
+	}
+	indexHTML = []byte(strings.NewReplacer(
+		"{{VERSION}}", html.EscapeString(version),
+		"{{HOSTNAME}}", html.EscapeString(host),
+	).Replace(string(b)))
+	if b, err = webFS.ReadFile("web/login.html"); err != nil {
+		logger.Fatal(err)
 	}
 	loginHTML = []byte(strings.NewReplacer(
 		"{{VERSION}}", html.EscapeString(version),

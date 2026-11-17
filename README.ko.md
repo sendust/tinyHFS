@@ -120,7 +120,7 @@ Go 1.26 이상이 필요합니다 (https://go.dev/dl/). 의존성: `golang.org/x
 build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 ```
 
-페이지 제목은 `tinyHFS by sendust <커밋 날짜/시각>`입니다. git 저장소 안에서 빌드하면 마지막 커밋 시각을, 아니면 빌드 시각을 사용합니다.
+브라우저 탭 제목은 `tinyHFS [<호스트 이름>]`이고, 화면 상단에는 `tinyHFS by sendust [<커밋 날짜/시각>]`이 표시됩니다. git 저장소 안에서 빌드하면 마지막 커밋 시각을, 아니면 빌드 시각을 사용합니다.
 
 ## HTTP API
 

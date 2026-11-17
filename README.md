@@ -120,7 +120,7 @@ Requires Go ≥ 1.26 (https://go.dev/dl/). Dependency: `golang.org/x/net/webdav`
 build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 ```
 
-The page title is `tinyHFS by sendust <commit date/time>`. The date comes from the last git commit when built inside a git repository, otherwise the build time is used.
+The browser tab title is `tinyHFS [<hostname>]`; the header shows `tinyHFS by sendust [<commit date/time>]`. The date comes from the last git commit when built inside a git repository, otherwise the build time is used.
 
 ## HTTP API
 
