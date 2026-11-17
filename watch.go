@@ -24,6 +24,9 @@ const (
 	watchMaxInterval = 30 * time.Second
 	watchMaxDirs     = 256 // distinct folders watched at the same time
 	watchKeepAlive   = 25 * time.Second
+	// when only size/mtime of existing entries change (e.g. a file being written / recorded),
+	// clients are notified at most this often; added, removed or renamed entries notify at once
+	watchModifyEvery = 10 * time.Second
 )
 
 type dirWatch struct {
@@ -63,7 +66,9 @@ func watchSubscribe(dir string) (chan struct{}, func(), bool) {
 }
 
 func (w *dirWatch) run(dir string) {
-	sig, cost := dirSignature(dir)
+	names, sig, cost := dirSignature(dir)
+	var last time.Time // last notification
+	pending := false   // modify-only change not sent yet
 	for {
 		t := time.NewTimer(min(max(cost*10, watchMinInterval), watchMaxInterval)) // big/slow folders are polled less often
 		select {
@@ -72,12 +77,17 @@ func (w *dirWatch) run(dir string) {
 			return
 		case <-t.C:
 		}
-		var s uint64
-		s, cost = dirSignature(dir)
-		if s == sig {
+		n, s, c := dirSignature(dir)
+		cost = c
+		if s != sig {
+			pending = true
+		}
+		listChanged := n != names
+		names, sig = n, s
+		if !pending || (!listChanged && time.Since(last) < watchModifyEvery) {
 			continue
 		}
-		sig = s
+		pending, last = false, time.Now()
 		watchMu.Lock()
 		for ch := range w.subs {
 			select {
@@ -89,22 +99,26 @@ func (w *dirWatch) run(dir string) {
 	}
 }
 
-// dirSignature hashes the visible listing of dir (same entries as /api/list shows).
-func dirSignature(dir string) (uint64, time.Duration) {
+// dirSignature hashes the visible listing of dir (same entries as /api/list shows):
+// names = the set of entry names, full = names + size + mtime.
+func dirSignature(dir string) (names, full uint64, cost time.Duration) {
 	start := time.Now()
-	h := fnv.New64a()
 	f, err := os.Open(dir)
 	if err != nil {
+		h := fnv.New64a()
 		fmt.Fprint(h, "error:", err)
-		return h.Sum64(), time.Since(start)
+		return h.Sum64(), h.Sum64(), time.Since(start)
 	}
 	ents, err := f.ReadDir(-1)
 	f.Close()
+	var bad uint64
 	if err != nil && len(ents) == 0 {
+		h := fnv.New64a()
 		fmt.Fprint(h, "error:", err)
+		bad = h.Sum64()
 	}
 	// ReadDir order is not guaranteed to be stable, so combine per-entry hashes order-independently
-	var sum, xor uint64
+	var nSum, nXor, fSum, fXor uint64
 	for _, d := range ents {
 		name := d.Name()
 		if strings.HasSuffix(name, partSuffix) {
@@ -112,15 +126,17 @@ func dirSignature(dir string) (uint64, time.Duration) {
 		}
 		e := fnv.New64a()
 		e.Write([]byte(name))
+		v := e.Sum64()
+		nSum += v
+		nXor ^= v * 0x9E3779B97F4A7C15
 		if fi, err := d.Info(); err == nil {
 			fmt.Fprint(e, "\x00", fi.Size(), fi.ModTime().UnixNano(), fi.IsDir())
 		}
-		v := e.Sum64()
-		sum += v
-		xor ^= v * 0x9E3779B97F4A7C15
+		v = e.Sum64()
+		fSum += v
+		fXor ^= v * 0x9E3779B97F4A7C15
 	}
-	fmt.Fprint(h, len(ents), sum, xor)
-	return h.Sum64(), time.Since(start)
+	return bad ^ nSum ^ (nXor << 1), bad ^ fSum ^ (fXor << 1), time.Since(start)
 }
 
 func handleWatch(w http.ResponseWriter, r *http.Request) {

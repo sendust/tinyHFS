@@ -981,7 +981,9 @@ func logMW(next http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, code: 200}
 		next.ServeHTTP(sw, r)
 		p := r.URL.Path
-		quiet := p == "/api/progress" || p == "/api/upload/status" || (p == "/api/watch" && sw.code < 400) || (p == "/api/upload" && sw.code < 400)
+		quiet := p == "/api/progress" || p == "/api/upload/status" || (p == "/api/watch" && sw.code < 400) ||
+			(p == "/api/list" && r.URL.Query().Get("live") == "1" && sw.code < 400) || // automatic refresh after a change event
+			(p == "/api/upload" && sw.code < 400)
 		switch r.Method { // WebDAV clients send these constantly
 		case "PROPFIND", "OPTIONS", "LOCK", "UNLOCK", "PROPPATCH":
 			quiet = quiet || sw.code < 400 || sw.code == http.StatusUnauthorized

@@ -278,7 +278,7 @@ function watchDir(){const k=(S.search||document.hidden||typeof EventSource==='un
   es=new EventSource(`/api/watch?root=${S.root}&path=${encodeURIComponent(S.path)}`);
   es.addEventListener('change',()=>{clearTimeout(wT);wT=setTimeout(refresh,250)})}
 async function refresh(){if(S.search)return;const root=S.root,path=S.path;
-  try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}`);if(S.search||root!==S.root||path!==S.path)return;
+  try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}&live=1`);if(S.search||root!==S.root||path!==S.path)return;
     S.entries=d.entries;renderFree(d.free,d.total);const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);renderList()}catch{}}
 document.addEventListener('visibilitychange',()=>{const was=esKey;watchDir();if(!document.hidden&&!was&&esKey)refresh()});
 
