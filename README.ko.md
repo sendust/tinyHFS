@@ -75,6 +75,7 @@ tinyhfs -auth MyPass123 /mnt
   wget --user=x --password=MyPass123 -c http://host:10002/dl/0/path/file
   ```
 - 한 IP에서 비밀번호를 5번 틀리면 그 IP는 5분간 차단됩니다. 로그인 결과는 로그에 남습니다.
+- **삭제**(파일·폴더, 폴더는 내용 포함)는 `-auth`를 켰을 때만 가능합니다. 항목을 선택하고 **🗑 Delete** 버튼이나 Delete 키를 누릅니다. 삭제할 때마다 클라이언트 IP와 함께 로그에 남습니다. `-auth` 없이 실행하면 웹 UI에 삭제 버튼이 없고 WebDAV `DELETE`도 거부됩니다 (403).
 - 명령줄에 쓴 비밀번호는 같은 서버의 다른 사용자에게 보입니다 (`ps`). 이를 피하려면 `-auth` 대신 환경변수 `TINYHFS_AUTH`를 설정하세요.
 - 통신은 암호화되지 않은 HTTP입니다. 신뢰할 수 있는 네트워크나 VPN / HTTPS 리버스 프록시 뒤에서 사용하세요.
 
@@ -128,6 +129,7 @@ build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 | GET | `/api/roots` | root 목록과 여유/전체 용량 |
 | GET | `/api/list?root=&path=` | 폴더 내용 |
 | GET | `/api/search?root=&path=&q=[&limit=]` | 하위 폴더 포함 이름 검색 |
+| POST | `/api/delete` JSON `{"root":0,"path":"/dir","names":["a.txt","sub"]}` | 파일/폴더 삭제 (`-auth` 사용 시에만) |
 | POST | `/api/mkdir?root=&path=&name=` | 폴더 만들기 |
 | GET | `/api/upload/status?root=&path=&name=&size=` | 중단된 업로드의 이어 올릴 위치 |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | 업로드 조각 하나 전송 (요청 본문) |

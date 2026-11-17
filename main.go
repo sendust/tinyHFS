@@ -1181,6 +1181,7 @@ func main() {
 	mux.HandleFunc("/api/progress", handleProgress)
 	mux.HandleFunc("/api/cancel", handleCancel)
 	mux.HandleFunc("/api/search", handleSearch)
+	mux.HandleFunc("/api/delete", handleDelete)
 	mux.HandleFunc("/login", handleLoginPage)
 	mux.HandleFunc("/api/login", handleLogin)
 	mux.HandleFunc("/api/logout", handleLogout)

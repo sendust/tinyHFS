@@ -75,6 +75,7 @@ tinyhfs -auth MyPass123 /mnt
   wget --user=x --password=MyPass123 -c http://host:10002/dl/0/path/file
   ```
 - 5 wrong passwords from one IP → that IP is blocked for 5 minutes. Login results are written to the log.
+- **Delete** (files and folders, folders recursively) is available only when `-auth` is on: select items and press **🗑 Delete** or the Delete key. Every deletion is logged with the client IP. Without `-auth` the web UI has no delete button and WebDAV `DELETE` is refused (403).
 - The password on the command line is visible to other users of the host (`ps`). To avoid that, set the environment variable `TINYHFS_AUTH` instead of `-auth`.
 - Traffic is plain HTTP (not encrypted). Use it on trusted networks or behind a VPN / HTTPS reverse proxy.
 
@@ -128,6 +129,7 @@ The page title is `tinyHFS by sendust <commit date/time>`. The date comes from t
 | GET | `/api/roots` | Roots with free/total bytes |
 | GET | `/api/list?root=&path=` | Folder listing |
 | GET | `/api/search?root=&path=&q=[&limit=]` | Recursive name search |
+| POST | `/api/delete` JSON `{"root":0,"path":"/dir","names":["a.txt","sub"]}` | Delete files/folders (only with `-auth`) |
 | POST | `/api/mkdir?root=&path=&name=` | Create folder |
 | GET | `/api/upload/status?root=&path=&name=&size=` | Resume offset of a partial upload |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | Upload one chunk (request body) |

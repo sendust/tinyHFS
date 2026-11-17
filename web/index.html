@@ -31,6 +31,9 @@ main{max-width:1200px;margin:0 auto;padding:10px 16px 280px}
 button,select{font:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;cursor:pointer}
 button:hover:not(:disabled){border-color:var(--acc)}
 button:disabled{opacity:.45;cursor:default}
+button.danger{display:none;color:var(--err)}
+body.canDel button.danger{display:inline-block}
+button.danger:hover:not(:disabled){border-color:var(--err)}
 button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
 table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
@@ -167,6 +170,7 @@ tbody tr.pvcur td.name{font-weight:600}
     <button id="bUpDir" title="Upload a whole folder">⬆ Upload folder</button>
     <button id="bMk">＋ New folder</button>
     <button id="bDl" disabled>⬇ Download</button>
+    <button id="bDel" class="danger" disabled title="Delete selected files / folders (Delete key)">🗑 Delete</button>
     <button id="bZip" title="Download selection (or current folder) as zip">🗜 Zip download</button>
     <select id="zlv" title="Zip compression">
       <option value="0">Zip: store (no compress)</option>
@@ -241,7 +245,7 @@ let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.style.display
 // ---------- navigation
 function go(root,path){const h='#/'+root+'/'+encPath(path);if(location.hash===h)load();else location.hash=h}
 function parseHash(){const parts=location.hash.replace(/^#\/?/,'').split('/');let root=parseInt(parts[0],10);if(isNaN(root)||root<0||root>=S.roots.length)root=0;let segs=[];try{segs=parts.slice(1).filter(Boolean).map(decodeURIComponent)}catch{}return {root,path:'/'+segs.join('/')}}
-async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';renderRoots();renderIPs(d.ips||[],d.hostname)}
+async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';S.auth=!!d.auth;document.body.classList.toggle('canDel',S.auth);renderRoots();renderIPs(d.ips||[],d.hostname)}
 function renderIPs(ips,host){const el=$('#ips');el.innerHTML=(host?`🖥 <b class="hn">${esc(host)}</b>`:'')+(ips.length?' &nbsp;🌐 IPv4':'');
   for(const i of ips){const a=document.createElement('a');a.href=i.url;a.title=i.url;a.innerHTML=`${esc(i.ip)}<small>${esc(i.nic)}</small>`;el.appendChild(a)}}
 async function load(){
@@ -298,7 +302,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
     tb.appendChild(tr)}
   document.querySelectorAll('th[data-k]').forEach(th=>{const k=th.dataset.k;th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(S.sort.k===k?(S.sort.asc?' ▲':' ▼'):'')});
   updSel()}
-function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
+function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bDel').disabled=!n;$('#bDel').textContent=n?`🗑 Delete (${n})`:'🗑 Delete';$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
   $('#bZip').textContent=n?`🗜 Zip selected (${n})`:'🗜 Zip this folder';const all=$('#ckAll');const tot=S.entries.filter(e=>!e.denied).length;all.checked=n&&n===tot;all.indeterminate=n>0&&n<tot}
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};renderList()});
 $('#ckAll').onchange=ev=>{S.sel=ev.target.checked?new Set(S.entries.filter(e=>!e.denied).map(e=>e.name)):new Set();renderList()};
@@ -582,6 +586,19 @@ $('#bRef').onclick=()=>{loadRoots().catch(()=>{});S.search?doSearch():load()};
 $('#bOut').onclick=async()=>{try{await fetch('/api/logout',{method:'POST'})}catch{}toLogin()};
 $('#bMk').onclick=async()=>{const n=prompt('New folder name:');if(!n)return;
   try{await api(`/api/mkdir?root=${S.root}&path=${encodeURIComponent(S.path)}&name=${encodeURIComponent(n.trim())}`,{method:'POST'});load()}catch(e){toast(e.message)}};
+// delete (only offered when the server runs with -auth)
+async function delSelected(){if(!S.auth||!S.sel.size)return;
+  const ents=S.entries.filter(e=>S.sel.has(e.name)&&!e.denied);if(!ents.length)return;
+  const nd=ents.filter(e=>e.dir).length,nf=ents.length-nd;
+  const list=ents.slice(0,12).map(e=>(e.dir?'📁 ':'📄 ')+e.name+(e.dir?'/':'')).join('\n')+(ents.length>12?`\n… and ${ents.length-12} more`:'');
+  if(!confirm(`Delete ${[nf?nf+' file(s)':'',nd?nd+' folder(s)':''].filter(Boolean).join(' and ')}?\n\n${list}\n\n`+(nd?'⚠ Folders are deleted with ALL their contents.\n':'')+'This cannot be undone.'))return;
+  let d;try{d=await api('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({root:S.root,path:S.path,names:ents.map(e=>e.name)})})}
+  catch(e){toast('Delete failed: '+e.message);return}
+  const bad=d.failed||[];toast(`Deleted ${d.deleted}`+(bad.length?` · ${bad.length} failed (${bad[0].name}: ${bad[0].error})`:''));
+  if(PV.open&&PV.root===S.root&&PV.list[PV.i]&&ents.some(e=>{const p=joinP(S.path,e.name);const c=PV.list[PV.i].p;return c===p||c.startsWith(p+'/')}))closePv();
+  S.sel.clear();updSel();S.search?doSearch():load();loadRoots().catch(()=>{})}
+$('#bDel').onclick=delSelected;
+document.addEventListener('keydown',ev=>{if(ev.key==='Delete'&&S.auth&&S.sel.size&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){ev.preventDefault();delSelected()}});
 $('#bDl').onclick=async()=>{const ents=S.entries.filter(e=>S.sel.has(e.name));
   for(const e of ents){const p=joinP(S.path,e.name);if(e.dir)downloadZip(S.root,p,[],base(e.name)+'.zip');else downloadFile(S.root,p,base(e.name),e.size);await sleep(400)}};
 $('#bZip').onclick=()=>{const names=[...S.sel];const cur=S.path==='/'?(S.roots[S.root]||{}).name||'root':S.path.split('/').pop();

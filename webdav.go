@@ -78,6 +78,11 @@ func isDavGuidePath(r *http.Request) bool {
 }
 
 func handleWebDAV(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "DELETE" && !authEnabled {
+		// same rule as the web UI: deleting requires password authentication (-auth)
+		http.Error(w, "delete requires the server to run with -auth", http.StatusForbidden)
+		return
+	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		name := strings.TrimPrefix(r.URL.Path, davPrefix)
 		if fi, err := (multiFS{}).Stat(r.Context(), name); err == nil && fi.IsDir() {
