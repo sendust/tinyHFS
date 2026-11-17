@@ -981,7 +981,7 @@ func logMW(next http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, code: 200}
 		next.ServeHTTP(sw, r)
 		p := r.URL.Path
-		quiet := p == "/api/progress" || p == "/api/upload/status" || (p == "/api/upload" && sw.code < 400)
+		quiet := p == "/api/progress" || p == "/api/upload/status" || (p == "/api/watch" && sw.code < 400) || (p == "/api/upload" && sw.code < 400)
 		switch r.Method { // WebDAV clients send these constantly
 		case "PROPFIND", "OPTIONS", "LOCK", "UNLOCK", "PROPPATCH":
 			quiet = quiet || sw.code < 400 || sw.code == http.StatusUnauthorized
@@ -1203,6 +1203,7 @@ func main() {
 	mux.HandleFunc("/api/cancel", handleCancel)
 	mux.HandleFunc("/api/search", handleSearch)
 	mux.HandleFunc("/api/delete", handleDelete)
+	mux.HandleFunc("/api/watch", handleWatch)
 	mux.HandleFunc("/login", handleLoginPage)
 	mux.HandleFunc("/api/login", handleLogin)
 	mux.HandleFunc("/api/logout", handleLogout)

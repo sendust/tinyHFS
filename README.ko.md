@@ -58,6 +58,7 @@ tinyhfs -auth MyPass123 /mnt     # 비밀번호 보호
 - 폴더 만들기
 - **파일 검색**: 현재 폴더와 모든 하위 폴더에서 이름으로 검색합니다. 대소문자를 구분하지 않고, 공백으로 나눈 단어는 모두 포함돼야 합니다 (`report 2026`). 와일드카드 `*` `?`는 이름 전체와 비교합니다 (`*.mp4`). 검색 한 번에 최대 1000개 / 2분. 폴더를 병렬로 읽고, 진행 상황(스캔한 항목·폴더 수, 지금까지 찾은 결과, 현재 폴더)을 실시간으로 보여 주며 Stop 버튼으로 중단할 수 있습니다. 결과에서 바로 다운로드, zip 압축(폴더 구조 유지), 폴더 열기가 됩니다.
 - **이미지 / 미디어 미리보기**: 이미지(jpg, png, gif, webp, bmp, svg, avif, ico), 동영상(mp4, webm, mov, mkv, ogv), 오디오(mp3, m4a, aac, wav, flac, ogg, opus), 텍스트/코드(txt, log, md, csv, json, xml, yaml, srt, 소스 코드 등 — 앞 2 MB, UTF-8/UTF-16/EUC-KR 자동 판별), Markdown(제목·목록·표·코드·링크·상대경로 이미지 렌더링 또는 소스 보기), HTML(스크립트 없이 샌드박스로 렌더링 또는 소스 보기), PDF 파일을 클릭하면 다운로드 대신 화면을 세로로 나눠 오른쪽에 보여 줍니다 (이미지는 창 크기에 맞춤, 동영상/오디오는 플레이어로 재생·탐색). 재생 가능 여부는 브라우저 코덱에 따릅니다 (MXF, AVI, WMV 등은 재생 불가). ◀ ▶ / 방향키로 폴더 안 미리보기 파일 넘기기, Esc로 닫기, 경계선을 끌어 폭 조절
+- **폴더 실시간 갱신**: 열어 둔 폴더에 파일이 추가·삭제·변경되면 (다른 사용자, WebDAV, 서버 호스트에서 바꿔도) 목록이 저절로 새로 고쳐집니다. 서버는 브라우저가 지금 열어 둔 폴더만 확인하고 (2초마다, 크거나 느린 폴더는 더 드물게 — SMB/NFS 마운트에서도 동작) 변경을 Server-Sent Events로 보냅니다. 보고 있는 클라이언트가 없으면 아무것도 확인하지 않습니다. 백그라운드 탭은 감시를 멈추고 다시 보일 때 새로 고칩니다.
 - **비밀번호 인증** (`-auth`)
 - **WebDAV 서버** `/webdav/` — 네트워크 드라이브로 연결 ([WebDAV](#webdav) 참고)
 - 전송 패널: 파일 크기, %, 전송 속도, 남은 시간, 취소 / 재개
@@ -130,6 +131,7 @@ build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 | GET | `/api/list?root=&path=` | 폴더 내용 |
 | GET | `/api/search?root=&path=&q=[&limit=][&stream=1]` | 하위 폴더 포함 이름 검색 (`stream=1`: NDJSON 진행 상황 + 결과) |
 | POST | `/api/delete` JSON `{"root":0,"path":"/dir","names":["a.txt","sub"]}` | 파일/폴더 삭제 (`-auth` 사용 시에만) |
+| GET | `/api/watch?root=&path=` | Server-Sent Events: 폴더 목록이 바뀌면 `event: change` |
 | POST | `/api/mkdir?root=&path=&name=` | 폴더 만들기 |
 | GET | `/api/upload/status?root=&path=&name=&size=` | 중단된 업로드의 이어 올릴 위치 |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | 업로드 조각 하나 전송 (요청 본문) |

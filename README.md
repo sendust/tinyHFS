@@ -58,6 +58,7 @@ tinyhfs -auth MyPass123 /mnt     # password protected
 - Create folders
 - **File search**: searches the current folder and all subfolders by name. Case-insensitive; space separated words must all match (`report 2026`); wildcards `*` `?` match the whole name (`*.mp4`). Up to 1000 results / 2 min per search; folders are read in parallel and progress (items/folders scanned, results so far, current folder) is shown live with a Stop button. Results can be downloaded, zipped (folder structure kept) or opened
 - **Image / media preview**: clicking an image (jpg, png, gif, webp, bmp, svg, avif, ico), video (mp4, webm, mov, mkv, ogv), audio (mp3, m4a, aac, wav, flac, ogg, opus), text/code (txt, log, md, csv, json, xml, yaml, srt, source code… first 2 MB, UTF-8/UTF-16/EUC-KR detected), Markdown (rendered: headings, lists, tables, code, links, relative images; or as source), HTML (rendered in a sandbox without scripts, or as source) or PDF opens it in a right-side pane (images scaled to fit, video/audio with a player and seeking) instead of downloading. Playback depends on the browser's codecs (e.g. MXF, AVI, WMV are not playable). ◀ ▶ / arrow keys browse previewable files in the folder, Esc closes, drag the pane edge to resize
+- **Live folder updates**: the open folder refreshes by itself when files are added, removed or changed (also by other users, WebDAV or the host). The server polls only folders that a browser currently has open (every 2 s, less often for big/slow folders, so it also works on SMB/NFS mounts) and pushes changes with Server-Sent Events; with no client watching, nothing is polled. Background tabs stop watching and refresh when shown again
 - **Password authentication** (`-auth`)
 - **WebDAV server** at `/webdav/` — connect as a network drive (see [WebDAV](#webdav))
 - Transfer panel: size, %, speed, remaining time, cancel / resume
@@ -130,6 +131,7 @@ The browser tab title is `tinyHFS [<hostname>]`; the header shows `tinyHFS by se
 | GET | `/api/list?root=&path=` | Folder listing |
 | GET | `/api/search?root=&path=&q=[&limit=][&stream=1]` | Recursive name search (`stream=1`: NDJSON progress + results) |
 | POST | `/api/delete` JSON `{"root":0,"path":"/dir","names":["a.txt","sub"]}` | Delete files/folders (only with `-auth`) |
+| GET | `/api/watch?root=&path=` | Server-Sent Events: `event: change` when the folder's listing changes |
 | POST | `/api/mkdir?root=&path=&name=` | Create folder |
 | GET | `/api/upload/status?root=&path=&name=&size=` | Resume offset of a partial upload |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | Upload one chunk (request body) |
