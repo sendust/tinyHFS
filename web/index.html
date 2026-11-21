@@ -9,11 +9,11 @@
 <title>tinyHFS [{{HOSTNAME}}]</title>
 <script>try{const t=localStorage.getItem('tinyhfs.theme');if(t)document.documentElement.dataset.theme=t}catch{}</script>
 <style>
-:root{--bg:#f5f6f8;--panel:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e2e5ea;--acc:#2563eb;--hl:#e8effd;--ok:#16a34a;--err:#dc2626;--warn:#b45309}
-@media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--ok:#4ade80;--err:#f87171;--warn:#fbbf24;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--ok:#4ade80;--err:#f87171;--warn:#fbbf24;color-scheme:dark}
-:root[data-theme="pink"]{--bg:#fff0f6;--panel:#ffffff;--fg:#4a1d35;--muted:#a0607f;--line:#f8c8dc;--acc:#d6336c;--hl:#ffdeeb;--ok:#2b8a3e;--err:#c92a2a;--warn:#b45309}
-:root[data-theme="cloudy"]{--bg:#acacae;--panel:#b3b3b3;--fg:#141820;--muted:#3f444d;--line:#9ea0a4;--acc:#1d4ed8;--hl:#a2a7b1;--ok:#166534;--err:#a61b1b;--warn:#7c3a0a}
+:root{--bg:#f5f6f8;--panel:#fff;--fg:#1d2330;--muted:#6b7280;--line:#e2e5ea;--acc:#2563eb;--hl:#e8effd;--ok:#16a34a;--err:#dc2626;--warn:#b45309;--live:#e8590c}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--ok:#4ade80;--err:#f87171;--warn:#fbbf24;--live:#ffa94d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--ok:#4ade80;--err:#f87171;--warn:#fbbf24;--live:#ffa94d;color-scheme:dark}
+:root[data-theme="pink"]{--bg:#fff0f6;--panel:#ffffff;--fg:#4a1d35;--muted:#a0607f;--line:#f8c8dc;--acc:#d6336c;--hl:#ffdeeb;--ok:#2b8a3e;--err:#c92a2a;--warn:#b45309;--live:#d9480f}
+:root[data-theme="cloudy"]{--bg:#acacae;--panel:#b3b3b3;--fg:#141820;--muted:#3f444d;--line:#9ea0a4;--acc:#1d4ed8;--hl:#a2a7b1;--ok:#166534;--err:#a61b1b;--warn:#7c3a0a;--live:#9a3412}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg)}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -93,6 +93,9 @@ tr.up .name{color:var(--acc);font-weight:600}
 #sinfo .w{color:var(--warn)}
 .name .dirpart{color:var(--muted)}
 tbody tr.denied td{color:var(--muted)}
+tbody tr.live td.name a,tbody tr.live td.num{color:var(--live);font-weight:600}
+tbody tr.live td.name a::after{content:' ●';font-size:.8em;animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{50%{opacity:.2}}
 tbody tr.denied td.name{font-style:italic}
 td.warn{background:color-mix(in srgb,var(--warn) 12%,var(--panel));color:var(--warn);font-size:12.5px;white-space:normal}
 /* image preview: right half of the window */
@@ -234,7 +237,7 @@ button.thm:active{transform:scale(.9)}
 <script>
 'use strict';
 const $=s=>document.querySelector(s);
-const S={roots:[],root:0,path:'/',entries:[],sort:{k:'name',asc:true},sel:new Set(),search:null};
+const S={roots:[],root:0,path:'/',entries:[],sort:{k:'name',asc:true},sel:new Set(),search:null,active:new Set()};
 const base=n=>n.split('/').pop();
 const CHUNK=8*1024*1024, UP_CONC=2;
 
@@ -274,9 +277,13 @@ window.addEventListener('hashchange',load);
 // live updates: the server pushes "change" (SSE) while this folder is open; hidden tabs stop watching
 let es=null,esKey='',wT=null;
 function watchDir(){const k=(S.search||document.hidden||typeof EventSource==='undefined')?'':S.root+'|'+S.path;if(k===esKey&&(!es||es.readyState!==2))return;
-  if(es){es.close();es=null}esKey=k;if(!k)return;
+  if(es){es.close();es=null}if(k!==esKey)setActive([]);esKey=k;if(!k)return;
   es=new EventSource(`/api/watch?root=${S.root}&path=${encodeURIComponent(S.path)}`);
-  es.addEventListener('change',()=>{clearTimeout(wT);wT=setTimeout(refresh,250)})}
+  es.addEventListener('change',()=>{clearTimeout(wT);wT=setTimeout(refresh,250)});
+  es.addEventListener('active',ev=>{try{setActive(JSON.parse(ev.data))}catch{}})}
+// files being written (sent by the server's folder poll): colored without re-reading the list
+function setActive(a){S.active=new Set(a);if(S.search)return;document.querySelectorAll('#list tr[data-n]').forEach(tr=>{const on=S.active.has(tr.dataset.n)&&!tr.classList.contains('denied')&&!!tr.querySelector('[data-a="dl"]');
+  if(on!==tr.classList.contains('live')){tr.classList.toggle('live',on);if(on)tr.title='Being written (size or time changing)';else if(tr.title.startsWith('Being written'))tr.removeAttribute('title')}})}
 async function refresh(){if(S.search)return;const root=S.root,path=S.path;
   try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}&live=1`);if(S.search||root!==S.root||path!==S.path)return;
     S.entries=d.entries;renderFree(d.free,d.total);const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);renderList()}catch{}}
@@ -300,7 +307,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
   if(!list.length){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="empty">${S.search?(S.search.running?'Searching…':'No matches'):'Empty folder — drop files here to upload'}</td>`;tb.appendChild(tr)}
   const nDen=list.filter(e=>e.denied).length;
   if(nDen){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="warn">🔒 ${nDen} item(s) cannot be accessed (permission denied on the server). Folders need <b>r + x</b> permission for the user running tinyHFS — e.g. <code>sudo chmod -R a+rX &lt;folder&gt;</code></td>`;tb.appendChild(tr)}
-  for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';
+  for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';tr.dataset.n=e.name;
     if(e.denied){const bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);tr.className='denied';tr.title='Permission denied — cannot open, size and date unknown';
       tr.innerHTML=`<td class="ck"><input type="checkbox" disabled></td><td class="name"><span class="ico">🔒</span>${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}${e.dir?'/':''}</td><td class="num">—</td><td class="num">—</td><td class="act"></td>`;
       tr.onclick=()=>toast('Permission denied: '+bn);tb.appendChild(tr);continue}
@@ -309,6 +316,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
       <td class="name"><span class="ico">${e.dir?'📁':({img:'🖼',video:'🎬',audio:'🎵',text:'📝',md:'📘',html:'🌐',pdf:'📕'}[pvKind(bn)]||'📄')}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
       <td class="num">${e.dir?'':fmtSize(e.size)}</td><td class="num">${fmtDate(e.mtime)}</td>
       <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
+    if(!e.dir&&S.active.has(e.name)){tr.classList.add('live');tr.title='Being written (size or time changing)'}
     tr.querySelector('input').onchange=ev=>{ev.target.checked?S.sel.add(e.name):S.sel.delete(e.name);tr.classList.toggle('sel',ev.target.checked);updSel()};
     const a=tr.querySelector('.name a');
     if(!e.dir)a.onclick=ev=>{ev.preventDefault();pvKind(bn)?openPv(p):downloadFile(S.root,p,bn,e.size)};
