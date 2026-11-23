@@ -29,6 +29,7 @@ chmod +x tinyhfs-linux-amd64
 
 ```
 tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
+tinyhfs[.exe] -update
 ```
 
 - `-auth password`: 비밀번호를 요구합니다 ([인증](#인증) 참고). 지정하지 않으면 네트워크의 누구나 접속할 수 있습니다.
@@ -37,6 +38,7 @@ tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
 - 포트 바인딩에 실패하면 포트를 1씩 올려 다시 시도합니다.
 - link up 상태이고 IPv4 주소가 있는 모든 NIC에서 서비스하며, 접속 주소를 stdout에 출력합니다.
 - 로그는 `./log/tinyhfs_YYYYMMDD.log`에 일별로 기록됩니다.
+- `-update`: 이 OS용 GitHub 최신 릴리스를 내려받아 `SHA256SUMS.txt`로 검증한 뒤 실행파일을 교체하고 종료합니다 (이후 서버를 다시 시작하세요). Windows에서는 이전 파일이 다음 실행 때까지 `tinyhfs.exe.old`로 남습니다. 실행파일 폴더에 쓰기 권한과 github.com HTTPS 접속이 필요합니다. v1.6.0 다음 릴리스부터 사용할 수 있습니다 (이전 버전은 한 번은 직접 교체해야 합니다).
 
 예시:
 
@@ -59,6 +61,7 @@ tinyhfs -auth MyPass123 /mnt     # 비밀번호 보호
 - **파일 검색**: 현재 폴더와 모든 하위 폴더에서 이름으로 검색합니다. 대소문자를 구분하지 않고, 공백으로 나눈 단어는 모두 포함돼야 합니다 (`report 2026`). 와일드카드 `*` `?`는 이름 전체와 비교합니다 (`*.mp4`). 검색 한 번에 최대 1000개 / 2분. 폴더를 병렬로 읽고, 진행 상황(스캔한 항목·폴더 수, 지금까지 찾은 결과, 현재 폴더)을 실시간으로 보여 주며 Stop 버튼으로 중단할 수 있습니다. 결과에서 바로 다운로드, zip 압축(폴더 구조 유지), 폴더 열기가 됩니다.
 - **이미지 / 미디어 미리보기**: 이미지(jpg, png, gif, webp, bmp, svg, avif, ico), 동영상(mp4, webm, mov, mkv, ogv), 오디오(mp3, m4a, aac, wav, flac, ogg, opus), 텍스트/코드(txt, log, md, csv, json, xml, yaml, srt, 소스 코드 등 — 앞 2 MB, UTF-8/UTF-16/EUC-KR 자동 판별), Markdown(제목·목록·표·코드·링크·상대경로 이미지 렌더링 또는 소스 보기), HTML(스크립트 없이 샌드박스로 렌더링 또는 소스 보기), PDF 파일을 클릭하면 다운로드 대신 화면을 세로로 나눠 오른쪽에 보여 줍니다 (이미지는 창 크기에 맞춤, 동영상/오디오는 플레이어로 재생·탐색). 재생 가능 여부는 브라우저 코덱에 따릅니다 (MXF, AVI, WMV 등은 재생 불가). ◀ ▶ / 방향키로 폴더 안 미리보기 파일 넘기기, Esc로 닫기, 경계선을 끌어 폭 조절
 - **폴더 실시간 갱신**: 열어 둔 폴더에 파일이 추가·삭제·변경되면 (다른 사용자, WebDAV, 서버 호스트에서 바꿔도) 목록이 저절로 새로 고쳐집니다. 서버는 브라우저가 지금 열어 둔 폴더만 확인하고 (2초마다, 크거나 느린 폴더는 더 드물게 — SMB/NFS 마운트에서도 동작) 변경을 Server-Sent Events로 보냅니다. 보고 있는 클라이언트가 없으면 아무것도 확인하지 않습니다. 백그라운드 탭은 감시를 멈추고 다시 보일 때 새로 고칩니다.
+- **서버 간 복사 (드래그 & 드롭)**: 두 tinyHFS 서버를 브라우저 탭/창 두 개에 열고, 한쪽에서 파일·폴더(또는 선택한 항목들)를 끌어 다른 쪽에 놓으면 받는 서버가 보내는 서버에서 직접 내려받습니다 (데이터가 브라우저를 거치지 않음). 진행률·취소, 원본 수정시각 유지, 같은 이름이 있으면 덮어쓰기/건너뛰기를 지원하고 폴더는 하위까지 복사합니다. 두 서버가 네트워크로 서로 닿아야 합니다. 보내는 서버가 `-auth`를 쓰면 드래그에 그 폴더 전용 읽기 토큰(12시간 유효, 헤더로 전송, 로그에 남지 않음)이 담깁니다. 받는 서버는 드롭된 주소에 `/api/list`와 `/dl/`만 요청하고 리다이렉트는 따르지 않습니다. **두 서버의 네트워크가 다르면**: 받는 서버가 보내는 서버의 다른 IPv4 주소들도 시도하고, 모두 닿지 않으면 *브라우저를 거쳐* 복사합니다 (보내는 서버에서 읽어 받는 서버로 이어 올리기 업로드 — 더 느리고 탭을 열어 두어야 하며 빈 폴더는 만들지 않습니다). 이를 위해 보내는 서버는 유효한 토큰이 있는 요청에만 `/api/list`, `/dl/`의 교차 출처(CORS) 접근을 허용합니다
 - **비밀번호 인증** (`-auth`)
 - **WebDAV 서버** `/webdav/` — 네트워크 드라이브로 연결 ([WebDAV](#webdav) 참고)
 - 전송 패널: 파일 크기, %, 전송 속도, 남은 시간, 취소 / 재개
@@ -132,6 +135,7 @@ build.bat         # Windows     → dist\tinyhfs.exe, dist\tinyhfs
 | GET | `/api/search?root=&path=&q=[&limit=][&stream=1]` | 하위 폴더 포함 이름 검색 (`stream=1`: NDJSON 진행 상황 + 결과) |
 | POST | `/api/delete` JSON `{"root":0,"path":"/dir","names":["a.txt","sub"]}` | 파일/폴더 삭제 (`-auth` 사용 시에만) |
 | GET | `/api/watch?root=&path=` | Server-Sent Events: 폴더 목록이 바뀌면 `event: change` |
+| POST | `/api/rcopy` JSON `{"src":{"origin":"http://hostA:10002","root":0,"token":"","items":[{"path":"/dir/a.mp4"}]},"dst":{"root":0,"path":"/"},"policy":"overwrite","tid":"x1"}` | 다른 tinyHFS 서버에서 이 서버로 복사 (진행률: `/api/progress?ids=x1`) |
 | POST | `/api/mkdir?root=&path=&name=` | 폴더 만들기 |
 | GET | `/api/upload/status?root=&path=&name=&size=` | 중단된 업로드의 이어 올릴 위치 |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | 업로드 조각 하나 전송 (요청 본문) |

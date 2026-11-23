@@ -152,8 +152,10 @@ func usage() {
 	fmt.Println(`tinyHFS by sendust - tiny HTTP file server
 
 usage: tinyhfs [-auth password] [root_path1 root_path2 "path N" ...] [port]
+       tinyhfs -update
 
   -auth pw   require this password (or set env TINYHFS_AUTH)
+  -update    download the latest release from GitHub and replace this executable
   root_path  folder(s) to share (default: folder of the executable)
   port       TCP port (default: 10002, increments by 1 if busy)`)
 }
@@ -544,7 +546,12 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		warnDenied(full, denied, firstDenied, deniedErr)
 	}
 	free, total := diskUsage(full)
-	writeJSON(w, 200, map[string]any{"path": clean, "free": free, "total": total, "entries": list})
+	out := map[string]any{"path": clean, "free": free, "total": total, "entries": list}
+	if isAuthed(r) { // read-only token for server to server copy of this folder (rcopy.go), also without -auth (CORS relay)
+		ri, _ := strconv.Atoi(q.Get("root"))
+		out["xtok"] = makeXToken(ri, clean)
+	}
+	writeJSON(w, 200, out)
 }
 
 func handleMkdir(w http.ResponseWriter, r *http.Request) {
@@ -1136,8 +1143,17 @@ func main() {
 			return
 		}
 	}
+	for _, a := range os.Args[1:] {
+		if a == "-update" || a == "--update" {
+			os.Exit(selfUpdate())
+		}
+	}
+	cleanupOldExe()
 	setupLog()
 	version = versionString()
+	if releaseTag != "" {
+		version = releaseTag + " (" + version + ")"
+	}
 
 	args, pw, err := extractAuth(os.Args[1:])
 	if err != nil {
@@ -1206,6 +1222,7 @@ func main() {
 	mux.HandleFunc("/api/search", handleSearch)
 	mux.HandleFunc("/api/delete", handleDelete)
 	mux.HandleFunc("/api/watch", handleWatch)
+	mux.HandleFunc("/api/rcopy", handleRCopy)
 	mux.HandleFunc("/login", handleLoginPage)
 	mux.HandleFunc("/api/login", handleLogin)
 	mux.HandleFunc("/api/logout", handleLogout)
@@ -1215,7 +1232,7 @@ func main() {
 	mux.HandleFunc("/zip/", handleZip)
 
 	srv := &http.Server{
-		Handler:           logMW(authMW(mux)),
+		Handler:           logMW(corsMW(authMW(mux))),
 		ReadHeaderTimeout: 30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

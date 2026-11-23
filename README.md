@@ -29,6 +29,7 @@ chmod +x tinyhfs-linux-amd64
 
 ```
 tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
+tinyhfs[.exe] -update
 ```
 
 - `-auth password`: require a password (see [Authentication](#authentication)). Without it anyone on the network can access.
@@ -37,6 +38,7 @@ tinyhfs[.exe] [-auth password] [root_path1 root_path2 "path N" ...] [port]
 - If the port is busy, port+1, +2 … is tried.
 - Serves on every NIC that is up and has an IPv4 address; the access URLs are printed to stdout.
 - Logs are written to `./log/tinyhfs_YYYYMMDD.log`.
+- `-update`: downloads the latest GitHub release for this OS, verifies it against `SHA256SUMS.txt` and replaces the executable, then exits (restart the server afterwards). On Windows the old file is kept as `tinyhfs.exe.old` until the next start. Needs write permission on the executable's folder and HTTPS access to github.com. Available from the release after v1.6.0 (older builds must be replaced by hand once).
 
 Examples:
 
@@ -59,6 +61,7 @@ tinyhfs -auth MyPass123 /mnt     # password protected
 - **File search**: searches the current folder and all subfolders by name. Case-insensitive; space separated words must all match (`report 2026`); wildcards `*` `?` match the whole name (`*.mp4`). Up to 1000 results / 2 min per search; folders are read in parallel and progress (items/folders scanned, results so far, current folder) is shown live with a Stop button. Results can be downloaded, zipped (folder structure kept) or opened
 - **Image / media preview**: clicking an image (jpg, png, gif, webp, bmp, svg, avif, ico), video (mp4, webm, mov, mkv, ogv), audio (mp3, m4a, aac, wav, flac, ogg, opus), text/code (txt, log, md, csv, json, xml, yaml, srt, source code… first 2 MB, UTF-8/UTF-16/EUC-KR detected), Markdown (rendered: headings, lists, tables, code, links, relative images; or as source), HTML (rendered in a sandbox without scripts, or as source) or PDF opens it in a right-side pane (images scaled to fit, video/audio with a player and seeking) instead of downloading. Playback depends on the browser's codecs (e.g. MXF, AVI, WMV are not playable). ◀ ▶ / arrow keys browse previewable files in the folder, Esc closes, drag the pane edge to resize
 - **Live folder updates**: the open folder refreshes by itself when files are added, removed or changed (also by other users, WebDAV or the host). The server polls only folders that a browser currently has open (every 2 s, less often for big/slow folders, so it also works on SMB/NFS mounts) and pushes changes with Server-Sent Events; with no client watching, nothing is polled. Background tabs stop watching and refresh when shown again
+- **Copy between servers (drag & drop)**: with two tinyHFS servers open in two browser tabs/windows, drag files or folders (or a selection) from one page and drop them on the other: the receiving server downloads them directly from the sending server (the data does not pass through the browser), with progress, cancel, original modification times, and overwrite/skip for existing names. Folders are copied recursively. The servers must reach each other over the network. If the source runs with `-auth`, the drag carries a read-only token for that folder (valid 12 h, sent as a header, not logged). The receiving server only requests `/api/list` and `/dl/` from the dropped address and does not follow redirects. **If the servers are on different networks**: the receiving server also tries the sending server's other IPv4 addresses; if none is reachable, the page falls back to copying *through the browser* (reads from the sending server, uploads to the receiving one with the resumable upload — slower, and the tab must stay open; empty folders are not created). For that the sending server answers cross-origin requests on `/api/list` and `/dl/` only when they carry a valid token
 - **Password authentication** (`-auth`)
 - **WebDAV server** at `/webdav/` — connect as a network drive (see [WebDAV](#webdav))
 - Transfer panel: size, %, speed, remaining time, cancel / resume
@@ -132,6 +135,7 @@ The browser tab title is `tinyHFS [<hostname>]`; the header shows `tinyHFS by se
 | GET | `/api/search?root=&path=&q=[&limit=][&stream=1]` | Recursive name search (`stream=1`: NDJSON progress + results) |
 | POST | `/api/delete` JSON `{"root":0,"path":"/dir","names":["a.txt","sub"]}` | Delete files/folders (only with `-auth`) |
 | GET | `/api/watch?root=&path=` | Server-Sent Events: `event: change` when the folder's listing changes |
+| POST | `/api/rcopy` JSON `{"src":{"origin":"http://hostA:10002","root":0,"token":"","items":[{"path":"/dir/a.mp4"}]},"dst":{"root":0,"path":"/"},"policy":"overwrite","tid":"x1"}` | Copy from another tinyHFS server into this one (progress via `/api/progress?ids=x1`) |
 | POST | `/api/mkdir?root=&path=&name=` | Create folder |
 | GET | `/api/upload/status?root=&path=&name=&size=` | Resume offset of a partial upload |
 | PUT | `/api/upload?root=&path=&name=&size=&offset=[&mtime=]` | Upload one chunk (request body) |

@@ -7,9 +7,11 @@ cd "$(dirname "$0")"
 if git rev-parse --git-dir >/dev/null 2>&1; then
   BD=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M:%S')
   TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)
+  DESC=$(git describe --tags 2>/dev/null || echo "")   # v1.7.0, or v1.7.0-3-gabc after the tag
 else
   BD=$(date '+%Y-%m-%d %H:%M:%S')
   TAG=v0.0.0
+  DESC=""
 fi
 VER=${TAG#v}
 
@@ -25,7 +27,7 @@ else
   echo "go-winres not found: using existing rsrc_windows_*.syso (if any)"
 fi
 
-LDF="-s -w -X 'main.buildDate=$BD'"
+LDF="-s -w -X 'main.buildDate=$BD' -X 'main.releaseTag=$DESC'"
 mkdir -p dist
 CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$LDF" -o dist/tinyhfs .
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDF" -o dist/tinyhfs.exe .

@@ -260,7 +260,8 @@ let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.style.display
 // ---------- navigation
 function go(root,path){const h='#/'+root+'/'+encPath(path);if(location.hash===h)load();else location.hash=h}
 function parseHash(){const parts=location.hash.replace(/^#\/?/,'').split('/');let root=parseInt(parts[0],10);if(isNaN(root)||root<0||root>=S.roots.length)root=0;let segs=[];try{segs=parts.slice(1).filter(Boolean).map(decodeURIComponent)}catch{}return {root,path:'/'+segs.join('/')}}
-async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';S.auth=!!d.auth;document.body.classList.toggle('canDel',S.auth);renderRoots();renderIPs(d.ips||[],d.hostname)}
+async function loadRoots(){const d=await api('/api/roots');S.roots=d.roots;$('#bOut').style.display=d.auth?'inline-block':'none';S.auth=!!d.auth;document.body.classList.toggle('canDel',S.auth);renderRoots();renderIPs(d.ips||[],d.hostname);
+  S.alts=(d.ips||[]).map(i=>{try{return new URL(i.url).origin}catch{return ''}}).filter(o=>o&&o!==location.origin)}
 function renderIPs(ips,host){const el=$('#ips');el.innerHTML=(host?`🖥 <b class="hn">${esc(host)}</b>`:'')+(ips.length?' &nbsp;🌐 IPv4':'');
   for(const i of ips){const a=document.createElement('a');a.href=i.url;a.title=i.url;a.innerHTML=`${esc(i.ip)}<small>${esc(i.nic)}</small>`;el.appendChild(a)}}
 async function load(){
@@ -268,7 +269,7 @@ async function load(){
   const changed=root!==S.root||path!==S.path;S.root=root;S.path=path;if(changed)S.sel.clear();
   endSearch();watchDir();
   renderRoots();renderCrumbs();
-  try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}`);S.entries=d.entries;renderFree(d.free,d.total);
+  try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}`);S.entries=d.entries;S.xtok=d.xtok||'';renderFree(d.free,d.total);
     const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);
     renderList()}
   catch(e){S.entries=[];renderList();toast(e.message)}
@@ -286,7 +287,7 @@ function setActive(a){S.active=new Set(a);if(S.search)return;document.querySelec
   if(on!==tr.classList.contains('live')){tr.classList.toggle('live',on);if(on)tr.title='Being written (size or time changing)';else if(tr.title.startsWith('Being written'))tr.removeAttribute('title')}})}
 async function refresh(){if(S.search)return;const root=S.root,path=S.path;
   try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}&live=1`);if(S.search||root!==S.root||path!==S.path)return;
-    S.entries=d.entries;renderFree(d.free,d.total);const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);renderList()}catch{}}
+    S.entries=d.entries;S.xtok=d.xtok||'';renderFree(d.free,d.total);const names=new Set(S.entries.map(e=>e.name));for(const n of [...S.sel])if(!names.has(n))S.sel.delete(n);renderList()}catch{}}
 document.addEventListener('visibilitychange',()=>{const was=esKey;watchDir();if(!document.hidden&&!was&&esKey)refresh()});
 
 // ---------- render
@@ -327,7 +328,10 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
     tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):dlURL(S.root,p));
       const fname=(e.dir?bn+'.zip':bn).replace(/:/g,'_');
       ev.dataTransfer.setData('DownloadURL',`${e.dir?'application/zip':'application/octet-stream'}:${fname}:${url}`);
-      ev.dataTransfer.setData('text/uri-list',url);ev.dataTransfer.setData('text/plain',url);ev.dataTransfer.effectAllowed='copy'});
+      ev.dataTransfer.setData('text/uri-list',url);ev.dataTransfer.setData('text/plain',url);ev.dataTransfer.effectAllowed='copy';
+      // for another tinyHFS tab: drop there = that server copies the items straight from this server
+      const items=(S.sel.has(e.name)?S.entries.filter(x=>S.sel.has(x.name)&&!x.denied):[e]).map(x=>({path:joinP(S.path,x.name),name:base(x.name),dir:x.dir,size:x.size,mtime:x.mtime}));
+      ev.dataTransfer.setData(XT,JSON.stringify({v:1,origin:location.origin,alts:S.alts||[],host:HOST,root:S.root,dir:S.path,items,token:S.xtok||''}))});
     tr.addEventListener('dragend',()=>{dragOut=false});
     tb.appendChild(tr)}
   document.querySelectorAll('th[data-k]').forEach(th=>{const k=th.dataset.k;th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(S.sort.k===k?(S.sort.asc?' ▲':' ▼'):'')});
@@ -344,7 +348,7 @@ const X=[];let xseq=0;
 class Xfer{
   constructor(kind,name,total){this.id=++xseq;this.kind=kind;this.name=name;this.total=total;this.done=0;this.base=0;this.samples=[];this.status='queued';this.cls='';this.note='';this.sent=0;
     const el=document.createElement('div');el.className='xi';
-    el.innerHTML=`<span>${kind==='up'?'⬆':kind==='zip'?'🗜':'⬇'}</span><span class="nm" title="${esc(name)}">${esc(name)}</span>
+    el.innerHTML=`<span>${kind==='up'?'⬆':kind==='zip'?'🗜':kind==='copy'?'⇄':'⬇'}</span><span class="nm" title="${esc(name)}">${esc(name)}</span>
       <span class="pb h1"><span class="bar"><i></i></span><span class="n pc"></span></span><span class="n h1 sz"></span><span class="n h1 sp"></span><span class="n h1 eta"></span>
       <span class="s"></span><span class="b"></span>`;
     this.el=el;$('#xlist').prepend(el);X.push(this);$('#xfer').classList.remove('hide');this.render()}
@@ -367,7 +371,7 @@ class Xfer{
     if(this.active)btn('✕',()=>this.cancel(),'Cancel / pause');
     else if(this.kind==='up'&&this.cls!=='ok'&&this.status!=='skipped')btn('▶',()=>this.resume(),'Resume upload');
     updSum()})}
-  cancel(){if(this.kind==='up'){this.cancelled=true;this.xhr&&this.xhr.abort()}else{fetch('/api/cancel?tid='+this.tid,{method:'POST'});this.note='cancelled — resume from browser downloads'}}
+  cancel(){if(this.kind==='up'){this.cancelled=true;this.xhr&&this.xhr.abort()}else{fetch('/api/cancel?tid='+this.tid,{method:'POST'});this.note=this.kind==='copy'?'cancelling':'cancelled — resume from browser downloads'}}
   resume(){if(this.kind==='up'){this.cancelled=false;this.note='';this.set('queued');upQ.push(this);pumpUp()}}
 }
 function updSum(){const act=X.filter(x=>x.active);let sp=0;for(const x of act)sp+=x.speed();
@@ -376,12 +380,12 @@ $('#bClr').onclick=()=>{for(let i=X.length-1;i>=0;i--){const x=X[i];if(!x.active
 $('#bHide').onclick=()=>$('#xfer').classList.add('hide');
 setInterval(()=>{for(const x of X)if(x.active)x.render()},1000);
 
-let refT;function afterXfer(x){if(x.kind!=='up')return;clearTimeout(refT);refT=setTimeout(()=>{if(x.root===S.root&&!S.search)load();loadRoots().catch(()=>{})},400)}
+let refT;function afterXfer(x){if(x.kind!=='up'&&x.kind!=='copy')return;clearTimeout(refT);refT=setTimeout(()=>{if(x.root===S.root&&!S.search)load();loadRoots().catch(()=>{})},400)}
 
 // ---------- upload (chunked, resumable)
 const upQ=[];let upActive=0;
-function enqueueUploads(items){if(!items.length)return;const batch={policy:null};
-  for(const it of items){const x=new Xfer('up',it.rel,it.file.size);x.file=it.file;x.rel=it.rel;x.root=S.root;x.dir=S.path;x.batch=batch;upQ.push(x)}
+function enqueueUploads(items,policy){if(!items.length)return;const batch={policy:policy==null?null:policy};
+  for(const it of items){const x=new Xfer('up',it.rel,it.file.size);x.file=it.file;x.rel=it.rel;if(it.src){x.src=it.src;x.note='via browser'}x.root=S.root;x.dir=S.path;x.batch=batch;upQ.push(x)}
   pumpUp()}
 function pumpUp(){while(upActive<UP_CONC&&upQ.length){const x=upQ.shift();upActive++;runUpload(x).catch(e=>x.fail(e.message)).finally(()=>{upActive--;pumpUp()})}}
 function xhrPut(x,url,blob,base){return new Promise((res,rej)=>{const r=new XMLHttpRequest();x.xhr=r;r.open('PUT',url);
@@ -403,7 +407,7 @@ async function runUpload(x){
   do{
     if(x.cancelled){x.active=false;return x.set('paused','warn')}
     const end=Math.min(off+CHUNK,size);
-    try{const r=await xhrPut(x,`/api/upload?${q}&offset=${off}&mtime=${x.file.lastModified||0}`,x.file.slice(off,end),off);off=r.offset;retries=0;x.update(off);if(x.status!=='uploading')x.set('uploading')}
+    try{const r=await xhrPut(x,`/api/upload?${q}&offset=${off}&mtime=${x.file.lastModified||0}`,await (x.src?x.src(off,end):x.file.slice(off,end)),off);off=r.offset;retries=0;x.update(off);if(x.status!=='uploading')x.set('uploading')}
     catch(e){
       if(x.cancelled){x.active=false;return x.set('paused','warn')}
       if(e.offset!=null){off=e.offset;x.start(off);continue}
@@ -425,8 +429,8 @@ async function poll(){if(!pollSet.size){clearInterval(pollT);pollT=null;return}
   for(const x of list){const p=d[x.tid];
     if(!p){if(Date.now()-x.created>30000){pollSet.delete(x);x.active=false;x.set('handed to browser (no progress info)','warn')}continue}
     if(p.total>=0)x.total=p.total;x.sent=p.sent;x.update(p.done);
-    if(p.finished){pollSet.delete(x);x.active=false;if(p.error)x.fail(p.error+(p.error!=='interrupted'&&p.error.indexOf('cancel')<0?'':' — resume in browser downloads'));else x.finish()}
-    else if(x.status!=='downloading'&&x.status!=='zipping')x.set(x.kind==='zip'?'zipping':'downloading')}}
+    if(p.finished){pollSet.delete(x);x.active=false;if(p.error)x.fail(p.error+(x.kind==='copy'||(p.error!=='interrupted'&&p.error.indexOf('cancel')<0)?'':' — resume in browser downloads'));else x.finish()}
+    else{const st=x.kind==='zip'?'zipping':x.kind==='copy'?(p.total<0?'listing source…':'copying'):'downloading';if(x.status!==st)x.set(st)}}}
 // ---------------------------------------------------------------- image preview
 // kinds the browser can show inline (mxf, avi, wmv... are not playable in browsers)
 const PV_RE={img:/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i,
@@ -661,12 +665,66 @@ $('#bZip').onclick=()=>{const names=[...S.sel];const cur=S.path==='/'?(S.roots[S
 
 // ---------- drag & drop upload
 let dragOut=false,dragCnt=0;
-const isFileDrag=ev=>!dragOut&&ev.dataTransfer&&[...ev.dataTransfer.types].includes('Files');
-document.addEventListener('dragenter',ev=>{if(!isFileDrag(ev))return;ev.preventDefault();dragCnt++;$('#drop').classList.add('show')});
+const XT='application/x-tinyhfs',HOST=document.title.replace(/^tinyHFS \[(.*)\]$/,'$1');
+const isTH=ev=>!dragOut&&ev.dataTransfer&&[...ev.dataTransfer.types].includes(XT);
+const isFileDrag=ev=>!dragOut&&ev.dataTransfer&&(isTH(ev)||[...ev.dataTransfer.types].includes('Files'));
+document.addEventListener('dragenter',ev=>{if(!isFileDrag(ev))return;ev.preventDefault();dragCnt++;
+  $('#drop').textContent=isTH(ev)?'Drop to copy here (server to server)':'Drop files or folders to upload';$('#drop').classList.add('show')});
 document.addEventListener('dragleave',ev=>{if(!isFileDrag(ev))return;if(--dragCnt<=0){dragCnt=0;$('#drop').classList.remove('show')}});
 document.addEventListener('dragover',ev=>{if(!isFileDrag(ev))return;ev.preventDefault();ev.dataTransfer.dropEffect='copy'});
 document.addEventListener('drop',async ev=>{if(!isFileDrag(ev))return;ev.preventDefault();dragCnt=0;$('#drop').classList.remove('show');
+  if(isTH(ev)){let d;try{d=JSON.parse(ev.dataTransfer.getData(XT))}catch{}if(d)remoteCopy(d);else toast('drop failed: no data');return}
   try{enqueueUploads(await collectDrop(ev.dataTransfer))}catch(e){toast('drop failed: '+e.message)}});
+// server to server copy: this server downloads the dropped items directly from the source server
+async function remoteCopy(d){
+  if(!d||!Array.isArray(d.items)||!d.items.length)return;
+  if(d.origin===location.origin&&d.root===S.root&&d.dir===S.path)return toast('Already in this folder');
+  const names=d.items.map(i=>i.name),dup=names.filter(n=>S.entries.some(e=>e.name===n));
+  let policy='overwrite';
+  if(dup.length)policy=confirm(`${dup.length} item(s) already exist here (e.g. "${dup[0]}").\n\nOK = overwrite existing files\nCancel = skip existing files`)?'overwrite':'skip';
+  const label=`${d.host||d.origin} → ${names.length===1?names[0]:names.length+' items'}`;
+  const x=new Xfer('copy',label,-1);x.tid=rid();x.root=S.root;x.active=true;x.start(0);x.set('starting');
+  x.set('connecting to source…');
+  let r,j={};
+  try{r=await fetch('/api/rcopy',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({src:{origin:d.origin,alts:d.alts||[],root:d.root,token:d.token||'',items:d.items.map(i=>({path:i.path}))},dst:{root:S.root,path:S.path},policy,tid:x.tid})});
+    j=await r.json().catch(()=>({}))}
+  catch(e){x.active=false;return x.fail('network error')}
+  if(r.status===401){toLogin();return}
+  if(!r.ok){x.active=false;
+    if(!j.unreachable)return x.fail(j.error||('HTTP '+r.status));
+    // fallback: this server cannot reach the source -> this browser reads from the source and uploads here
+    x.set('source not reachable from this server → copying through this browser','warn');
+    try{await relayCopy(d,policy);x.set('source not reachable from this server → copying through this browser (⬆ rows)','ok')}catch(e){x.fail('browser relay failed: '+e.message)}
+    return}
+  x.created=Date.now();pollSet.add(x);if(!pollT)pollT=setInterval(poll,700)}
+// browser relay: read the items from the source server (CORS, token) and upload them with the
+// normal resumable upload (8 MB chunks fetched with Range). Slower: data passes through this PC.
+async function relayCopy(d,policy){
+  const o=d.origin,H={'X-TinyHFS-Token':d.token||''};
+  const get=async(u,h)=>{let r;
+    try{r=await fetch(o+u,{headers:Object.assign({},H,h||{}),cache:'no-store'})}
+    catch{throw new Error('cannot read from the source server (it needs tinyHFS with copy support)')}
+    if(r.status===401)throw Object.assign(new Error('source refused access — reload the source page and drag again'),{status:401});
+    if(!r.ok){let m='HTTP '+r.status;try{m=(await r.json()).error||m}catch{}throw Object.assign(new Error('source: '+m),{status:r.status})}
+    return r};
+  const lst=async p=>((await (await get(`/api/list?root=${d.root}&path=${encodeURIComponent(p)}`)).json()).entries)||[];
+  const mk=(p,rel,e)=>({rel,file:{size:e.size,lastModified:(e.mtime||0)*1000,name:base(p)},
+    src:async(a,b)=>{if(b<=a)return new Blob([]);
+      const r=await get('/dl/'+d.root+'/'+encPath(p),{Range:`bytes=${a}-${b-1}`});
+      if(r.status===200&&a>0)throw Object.assign(new Error('source ignored the byte range'),{status:400});
+      const bl=await r.blob();const n=b-a;
+      if(bl.size<n)throw new Error('short read from source');return bl.size>n?bl.slice(0,n):bl}});
+  const items=[];let denied=0;
+  const walk=async(p,rel)=>{for(const e of await lst(p)){if(e.denied||(!e.dir&&e.size<0)){denied++;continue}
+    const cp=joinP(p,e.name),cr=rel+'/'+e.name;if(e.dir)await walk(cp,cr);else items.push(mk(cp,cr,e))}};
+  toast('Listing source files…');
+  for(const it of d.items){
+    if(it.dir)await walk(it.path,it.name);
+    else if(typeof it.size==='number'&&it.size>=0)items.push(mk(it.path,it.name,it));
+    else{const pe=(await lst(it.path.replace(/\/[^/]*$/,'')||'/')).find(e=>e.name===it.name);if(pe&&!pe.dir&&pe.size>=0)items.push(mk(it.path,it.name,pe));else denied++}}
+  toast(`Copying ${items.length} file(s) through this browser`+(denied?` · ${denied} not readable on source`:''));
+  enqueueUploads(items,policy==='overwrite')}
 async function collectDrop(dt){
   const entries=[...dt.items].filter(i=>i.kind==='file').map(i=>i.webkitGetAsEntry?i.webkitGetAsEntry():null);
   const files=[...dt.files];

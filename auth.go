@@ -183,7 +183,7 @@ func authMW(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if isAuthed(r) {
+		if isAuthed(r) || xTokenAuthorized(r) { // token: another tinyHFS server copying (rcopy.go)
 			next.ServeHTTP(w, r)
 			return
 		}
