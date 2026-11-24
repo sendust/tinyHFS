@@ -148,7 +148,14 @@ body.split #xfer{right:var(--pw,50vw)}
 #pv .pb.k-pdf iframe{display:block}
 #pv .pb.k-text .pmsg,#pv .pb.k-html .pmsg,#pv .pb.k-pdf .pmsg{top:8px;right:14px}
 #pv .ph .on{background:var(--hl);border-color:var(--acc)}
-#pvWrap,#pvSrc{display:none}
+#pvWrap,#pvSrc,#pvZoom{display:none}
+#pv.t-img #pvZoom{display:inline-block}
+#pv .pb.k-img{overflow:hidden}
+#pv .pb.k-img:not(.z1) img{cursor:zoom-in}
+/* 1:1 : grid + margin:auto centers small images, big ones scroll from their top-left edge */
+#pv .pb.k-img.z1{display:grid;overflow:auto;padding:0;cursor:grab}
+#pv .pb.k-img.z1 img{max-width:none;max-height:none;margin:auto;box-shadow:none}
+#pv .pb.k-img.z1.pan{cursor:grabbing;user-select:none}
 #pv.t-text #pvWrap,#pv.t-html #pvSrc,#pv.t-md #pvSrc{display:inline-block}
 #pv .pmsg{position:absolute;color:var(--muted);background:var(--panel);padding:4px 10px;border-radius:5px}
 #pv .grip{position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize;z-index:1}
@@ -220,6 +227,7 @@ button.thm:active{transform:scale(.9)}
     <button id="pvNext" title="Next (→)">▶</button>
     <div class="pt"><span id="pvName"></span><small id="pvInfo"></small></div>
     <a class="btn" id="pvOpen" target="_blank" rel="noopener" title="Open original in a new tab">↗</a>
+    <button id="pvZoom" title="Fit to pane / actual size 1:1 (Z, or click the image)">1:1</button>
     <button id="pvWrap" title="Toggle line wrap">↵ Wrap</button>
     <button id="pvSrc" title="Toggle rendered page / HTML source">&lt;/&gt; Source</button>
     <button id="pvDl" title="Download">⬇</button>
@@ -441,7 +449,7 @@ const PV_RE={img:/\.(jpe?g|png|gif|webp|bmp|svg|ico|avif|apng|jfif)$/i,
   md:/\.(md|markdown|mdown|mkd)$/i,
   text:/\.(txt|text|log|csv|tsv|json|jsonl|xml|ya?ml|toml|ini|conf|cfg|config|properties|env|sh|bash|zsh|bat|cmd|ps1|py|go|mod|sum|js|mjs|jsx|css|scss|less|c|h|cc|cpp|hpp|cs|java|kt|rs|rb|php|pl|lua|sql|r|swift|srt|vtt|ass|smi|nfo|diff|patch|gitignore|dockerfile|makefile|cue|m3u8?|reg|inf)$/i};
 const TXT_MAX=2*1024*1024; // text preview reads at most the first 2 MB
-const pvOpt={wrap:true,src:false};try{const o=JSON.parse(localStorage.getItem('tinyhfs.pvopt')||'{}');if(typeof o.wrap==='boolean')pvOpt.wrap=o.wrap}catch{}
+const pvOpt={wrap:true,src:false,z1:false};try{pvOpt.z1=localStorage.getItem('tinyhfs.pvzoom')==='1'}catch{}try{const o=JSON.parse(localStorage.getItem('tinyhfs.pvopt')||'{}');if(typeof o.wrap==='boolean')pvOpt.wrap=o.wrap}catch{}
 let pvAbort=null;
 // decode text: BOM -> utf-16/utf-8, valid utf-8, else Korean legacy (cp949)
 function decodeText(buf,truncated){const b=new Uint8Array(buf);
@@ -532,16 +540,16 @@ function mdRender(src,root,baseDir){
 
 function stopMedia(){if(pvAbort){pvAbort.abort();pvAbort=null}$('#pvTxt').textContent='';$('#pvMd').innerHTML='';const f=$('#pvFrm');f.onload=null;if(f.getAttribute('src')&&f.getAttribute('src')!=='about:blank')f.src='about:blank';for(const m of [$('#pvVid'),$('#pvAud')]){m.pause();if(m.hasAttribute('src')){m.removeAttribute('src');m.load()}}}
 function showPv(){const it=PV.list[PV.i];if(!it)return closePv();
-  const body=$('#pvBody'),msg=$('#pvMsg'),url=pvURL(PV.root,it.p),pos=`${PV.i+1} / ${PV.list.length}`,info=t=>$('#pvInfo').textContent=[pos,t,fmtSize(it.size)].filter(Boolean).join(' · ');
+  const body=$('#pvBody'),msg=$('#pvMsg'),url=pvURL(PV.root,it.p),info=t=>{PV.info=t;pvInfoUpd()};
   $('#pvName').textContent=it.name;$('#pvName').parentNode.title=it.p;info('');
   $('#pvOpen').href=url;$('#pvPrev').disabled=PV.i<=0;$('#pvNext').disabled=PV.i>=PV.list.length-1;
   stopMedia();const img=$('#pvImg');img.onload=img.onerror=null;img.removeAttribute('src');
   const kind=(it.kind==='html'||it.kind==='md')&&pvOpt.src?'text':it.kind;
-  body.className='pb k-'+kind+(pvOpt.wrap?' wrap':'');$('#pv').className='t-'+kind+(it.kind==='html'||it.kind==='md'?' t-'+it.kind:'');msg.textContent='Loading…';msg.style.display='';
+  body.className='pb k-'+kind+(pvOpt.wrap?' wrap':'')+(kind==='img'&&pvOpt.z1?' z1':'');img.style.width='';$('#pvZoom').textContent=pvOpt.z1?'Fit':'1:1';$('#pv').className='t-'+kind+(it.kind==='html'||it.kind==='md'?' t-'+it.kind:'');msg.textContent='Loading…';msg.style.display='';
   $('#pvWrap').classList.toggle('on',pvOpt.wrap);$('#pvSrc').classList.toggle('on',pvOpt.src);
   const fail=t=>{body.className='pb';msg.textContent=t;msg.style.display=''};
   if(it.kind==='img'){
-    img.onload=()=>{msg.style.display='none';if(img.naturalWidth)info(`${img.naturalWidth} × ${img.naturalHeight}`)};
+    img.onload=()=>{msg.style.display='none';pvZoomSize();if(img.naturalWidth)info(`${img.naturalWidth} × ${img.naturalHeight}`)};
     img.onerror=()=>fail('Cannot display this image in the browser');
     img.src=url;
     const nx=PV.list[PV.i+1];if(nx&&nx.kind==='img'){const pre=new Image();pre.src=pvURL(PV.root,nx.p)}
@@ -578,6 +586,30 @@ $('#pvWrap').onclick=()=>{pvOpt.wrap=!pvOpt.wrap;try{localStorage.setItem('tinyh
 $('#pvMd').addEventListener('click',ev=>{const a=ev.target.closest('a[data-anchor]');if(!a)return;ev.preventDefault();
   const t=document.getElementById('md-'+a.dataset.anchor);if(t)t.scrollIntoView({behavior:'smooth',block:'start'})});
 $('#pvSrc').onclick=()=>{pvOpt.src=!pvOpt.src;showPv()};
+// ---- image: fit to pane / actual size (1:1 = one image pixel per screen pixel)
+function pvInfoUpd(){const it=PV.list[PV.i];if(!it)return;const img=$('#pvImg');let sc='';
+  if(it.kind==='img'&&img.naturalWidth&&img.clientWidth)sc=Math.round(img.clientWidth*devicePixelRatio/img.naturalWidth*100)+'%';
+  $('#pvInfo').textContent=[`${PV.i+1} / ${PV.list.length}`,PV.info,sc,fmtSize(it.size)].filter(Boolean).join(' · ')}
+function pvZoomSize(){const img=$('#pvImg');img.style.width=pvOpt.z1&&img.naturalWidth?img.naturalWidth/devicePixelRatio+'px':'';requestAnimationFrame(pvInfoUpd)}
+function setZoom(on,ev){const b=$('#pvBody'),img=$('#pvImg');if(!b.classList.contains('k-img'))return;
+  let fx=.5,fy=.5,cx=b.clientWidth/2,cy=b.clientHeight/2;
+  if(ev){const r=img.getBoundingClientRect(),br=b.getBoundingClientRect();if(r.width&&r.height){fx=Math.min(Math.max((ev.clientX-r.left)/r.width,0),1);fy=Math.min(Math.max((ev.clientY-r.top)/r.height,0),1)}cx=ev.clientX-br.left;cy=ev.clientY-br.top}
+  pvOpt.z1=on;try{localStorage.setItem('tinyhfs.pvzoom',on?'1':'0')}catch{}
+  b.classList.toggle('z1',on);$('#pvZoom').textContent=on?'Fit':'1:1';pvZoomSize();
+  if(on){const w=img.offsetWidth,h=img.offsetHeight;b.scrollLeft=fx*w-cx;b.scrollTop=fy*h-cy}} // keep the clicked point under the mouse
+$('#pvZoom').onclick=()=>setZoom(!pvOpt.z1);
+new ResizeObserver(()=>{if(PV.open)pvZoomSize()}).observe($('#pvBody')); // pane resize, browser zoom (devicePixelRatio)
+// click = zoom in at that point; in 1:1, drag to pan, click (without dragging) = fit
+(()=>{const b=$('#pvBody'),img=$('#pvImg');let st=null;
+  b.addEventListener('pointerdown',ev=>{if(ev.button!==0||!b.classList.contains('k-img'))return;
+    if(!b.classList.contains('z1')){if(ev.target===img){ev.preventDefault();setZoom(true,ev)}return}
+    const br=b.getBoundingClientRect();if(ev.clientX-br.left>=b.clientWidth||ev.clientY-br.top>=b.clientHeight)return; // on a scrollbar
+    ev.preventDefault();st={x:ev.clientX,y:ev.clientY,l:b.scrollLeft,t:b.scrollTop,moved:false};b.setPointerCapture(ev.pointerId)});
+  b.addEventListener('pointermove',ev=>{if(!st)return;const dx=ev.clientX-st.x,dy=ev.clientY-st.y;if(!st.moved&&Math.abs(dx)+Math.abs(dy)>4){st.moved=true;b.classList.add('pan')}
+    if(st.moved){b.scrollLeft=st.l-dx;b.scrollTop=st.t-dy}});
+  const end=ev=>{if(!st)return;const click=!st.moved&&ev.type==='pointerup';st=null;b.classList.remove('pan');if(click)setZoom(false)};
+  b.addEventListener('pointerup',end);b.addEventListener('pointercancel',end);
+  img.draggable=false})();
 $('#pvDl').onclick=()=>{const it=PV.list[PV.i];if(it)downloadFile(PV.root,it.p,it.name,it.size)};
 (()=>{let w0=null;try{w0=localStorage.getItem('tinyhfs.pw')}catch{}if(w0)document.documentElement.style.setProperty('--pw',w0);
   const g=$('#pvGrip'),pv=$('#pv');g.addEventListener('pointerdown',ev=>{ev.preventDefault();g.setPointerCapture(ev.pointerId);pv.classList.add('drag');
@@ -585,7 +617,8 @@ $('#pvDl').onclick=()=>{const it=PV.list[PV.i];if(it)downloadFile(PV.root,it.p,i
     const up=()=>{pv.classList.remove('drag');g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);try{localStorage.setItem('tinyhfs.pw',getComputedStyle(document.documentElement).getPropertyValue('--pw').trim())}catch{}};
     g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up)})})();
 document.addEventListener('keydown',ev=>{const tg=document.activeElement.tagName;if(!PV.open||ev.altKey||ev.ctrlKey||ev.metaKey||/^(INPUT|TEXTAREA|SELECT)$/.test(tg)||(/^(VIDEO|AUDIO)$/.test(tg)&&ev.key!=='Escape'))return;
-  if(ev.key==='Escape'){closePv();ev.preventDefault()}else if(ev.key==='ArrowLeft'){stepPv(-1);ev.preventDefault()}else if(ev.key==='ArrowRight'){stepPv(1);ev.preventDefault()}});
+  if(ev.key==='Escape'){closePv();ev.preventDefault()}else if(ev.key==='ArrowLeft'){stepPv(-1);ev.preventDefault()}else if(ev.key==='ArrowRight'){stepPv(1);ev.preventDefault()}
+  else if((ev.key==='z'||ev.key==='Z')&&$('#pvBody').classList.contains('k-img')){setZoom(!pvOpt.z1);ev.preventDefault()}});
 
 function downloadFile(root,p,name,size){nativeDownload(dlURL(root,p),name,'down',size)}
 function downloadZip(root,dir,names,fname){nativeDownload(zipURL(root,dir,names),fname,'zip',-1)}
