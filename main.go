@@ -546,7 +546,7 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		warnDenied(full, denied, firstDenied, deniedErr)
 	}
 	free, total := diskUsage(full)
-	out := map[string]any{"path": clean, "free": free, "total": total, "entries": list}
+	out := map[string]any{"path": clean, "free": free, "total": total, "mount": mountPoint(full), "entries": list}
 	if isAuthed(r) { // read-only token for server to server copy of this folder (rcopy.go), also without -auth (CORS relay)
 		ri, _ := strconv.Atoi(q.Get("root"))
 		out["xtok"] = makeXToken(ri, clean)
