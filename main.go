@@ -1295,3 +1295,50 @@ func mustAbs(p string) string {
 	}
 	return p
 }
+
+// ReadFrom keeps sendfile(2) available behind the access-log wrapper.
+func (s *statusWriter) ReadFrom(r io.Reader) (int64, error) {
+	s.hdr = true
+	if rf, ok := s.ResponseWriter.(io.ReaderFrom); ok {
+		n, err := rf.ReadFrom(r)
+		s.n += n
+		return n, err
+	}
+	return io.Copy(struct{ io.Writer }{s}, r)
+}
+
+// ReadFrom: plain file downloads go out with sendfile(2) (no copy through user space),
+// in chunks so progress and cancel keep working.
+func (w *trackWriter) ReadFrom(r io.Reader) (int64, error) {
+	if !w.hdr {
+		w.WriteHeader(http.StatusOK)
+	}
+	rf, ok := w.ResponseWriter.(io.ReaderFrom)
+	lr, isLR := r.(*io.LimitedReader)
+	if !ok || !isLR {
+		return io.Copy(struct{ io.Writer }{w}, r)
+	}
+	if _, isFile := lr.R.(*os.File); !isFile {
+		return io.Copy(struct{ io.Writer }{w}, r)
+	}
+	var total int64
+	for lr.N > 0 {
+		if w.t.cancel.Load() {
+			return total, errCancelled
+		}
+		n, err := rf.ReadFrom(&io.LimitedReader{R: lr.R, N: min(lr.N, 8<<20)})
+		lr.N -= n
+		total += n
+		w.t.sent.Add(n)
+		if w.countDone {
+			w.t.done.Add(n)
+		}
+		if err != nil {
+			return total, err
+		}
+		if n == 0 {
+			break
+		}
+	}
+	return total, nil
+}

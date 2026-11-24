@@ -40,6 +40,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -50,6 +51,8 @@ const (
 	rcopyMaxJobs   = 4      // copy jobs running at the same time on this server
 	rcopyMaxFiles  = 200000 // files in one job
 	rcopyRetries   = 5
+	rcopyWorkers   = 4        // files downloaded at the same time in one job
+	rcopyBigFile   = 64 << 20 // files this large are downloaded one at a time (no seek thrashing on HDD)
 	rcopyPartInfix = ".rcopy" // name.rcopy.tinyhfs-part: never collides with an upload's part file
 )
 
@@ -194,8 +197,10 @@ type rcopyJob struct {
 	files  []rcopyFile
 	denied int
 
+	mu                      sync.Mutex // guards the counters below (workers run in parallel)
 	copied, skipped, failed int
 	firstErr                string
+	big                     chan struct{} // one big file at a time
 }
 
 var rcopyRunning atomic.Int32
@@ -205,7 +210,7 @@ var rcopyClient = &http.Client{
 		Proxy:                 nil, // servers talk to each other directly
 		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 		ResponseHeaderTimeout: 60 * time.Second,
-		MaxIdleConnsPerHost:   4,
+		MaxIdleConnsPerHost:   rcopyMaxJobs * rcopyWorkers,
 		IdleConnTimeout:       60 * time.Second,
 	},
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
@@ -311,12 +316,31 @@ func (j *rcopyJob) run(req rcopyReq, dstFull, dstClean, ip string) {
 			j.fail(filepath.Base(d), e)
 		}
 	}
+	// several small files at once (per-file round trips and disk metadata work overlap),
+	// but only one big file at a time
+	j.big = make(chan struct{}, 1)
+	work := make(chan rcopyFile)
+	var wg sync.WaitGroup
+	for range min(rcopyWorkers, len(j.files)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, 1<<20)
+			for f := range work {
+				j.copyOne(f, req.Policy == "skip", buf)
+			}
+		}()
+	}
 	for _, f := range j.files {
 		if j.t.cancel.Load() {
-			err = errCancelled
 			break
 		}
-		j.copyOne(f, req.Policy == "skip")
+		work <- f
+	}
+	close(work)
+	wg.Wait()
+	if j.t.cancel.Load() {
+		err = errCancelled
 	}
 	if err == nil && j.failed > 0 {
 		err = fmt.Errorf("%d failed (%s)", j.failed, j.firstErr)
@@ -346,6 +370,8 @@ func (j *rcopyJob) run(req rcopyReq, dstFull, dstClean, ip string) {
 }
 
 func (j *rcopyJob) fail(name string, err error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.failed++
 	if j.firstErr == "" {
 		j.firstErr = name + ": " + errText(err)
@@ -404,8 +430,7 @@ func (j *rcopyJob) probe(ctx context.Context, bases []string, dir string) (strin
 	ch := make(chan result, len(bases)) // buffered: late probes never block after we return
 	for i, b := range bases {
 		go func() {
-			jj := *j
-			jj.base = b
+			jj := &rcopyJob{base: b, root: j.root, token: j.token, client: j.client, t: j.t, ctx: j.ctx}
 			_, err := jj.listCtx(ctx, dir)
 			ch <- result{i, err}
 		}()
@@ -571,7 +596,7 @@ type permErr struct{ error }
 
 func (e permErr) Unwrap() error { return e.error }
 
-func (j *rcopyJob) copyOne(f rcopyFile, skipExisting bool) {
+func (j *rcopyJob) copyOne(f rcopyFile, skipExisting bool, buf []byte) {
 	name := path.Base(f.src)
 	if fi, err := os.Stat(f.dst); err == nil {
 		if fi.IsDir() {
@@ -580,14 +605,19 @@ func (j *rcopyJob) copyOne(f rcopyFile, skipExisting bool) {
 			return
 		}
 		if skipExisting {
+			j.mu.Lock()
 			j.skipped++
+			j.mu.Unlock()
 			j.t.done.Add(f.size)
 			return
 		}
 	}
 	part := f.dst + rcopyPartInfix + partSuffix
-	base := j.t.done.Load()
-	err := j.download(f, part, base)
+	if f.size >= rcopyBigFile {
+		j.big <- struct{}{}
+		defer func() { <-j.big }()
+	}
+	got, err := j.download(f, part, buf)
 	if err == nil {
 		if f.mtime > 0 {
 			os.Chtimes(part, time.Now(), time.Unix(f.mtime, 0))
@@ -598,40 +628,42 @@ func (j *rcopyJob) copyOne(f rcopyFile, skipExisting bool) {
 		os.Remove(part)
 		if !errors.Is(err, errCancelled) {
 			j.fail(name, err)
-			j.t.done.Store(base + f.size) // keep the progress bar consistent
+			j.t.done.Add(f.size - got) // keep the progress bar consistent
 		}
 		return
 	}
+	j.mu.Lock()
 	j.copied++
+	j.mu.Unlock()
 }
 
-func (j *rcopyJob) download(f rcopyFile, part string, base int64) error {
+// download returns the bytes written (already counted in the progress).
+func (j *rcopyJob) download(f rcopyFile, part string, buf []byte) (int64, error) {
 	out, err := os.OpenFile(part, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer out.Close()
 	var off int64
 	etag := ""
-	buf := make([]byte, 1<<20)
 	for attempt := 0; ; attempt++ {
-		err := j.fetch(f, out, &off, &etag, base, buf)
+		err := j.fetch(f, out, &off, &etag, buf)
 		var pe permErr
 		if errors.As(err, &pe) {
-			return pe.error
+			return off, pe.error
 		}
 		if err == nil || errors.Is(err, errCancelled) || attempt >= rcopyRetries {
-			return err
+			return off, err
 		}
 		time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
 		if j.t.cancel.Load() {
-			return errCancelled
+			return off, errCancelled
 		}
 	}
 }
 
 // fetch downloads from offset *off (Range + If-Range on retries) and appends to out.
-func (j *rcopyJob) fetch(f rcopyFile, out *os.File, off *int64, etag *string, base int64, buf []byte) error {
+func (j *rcopyJob) fetch(f rcopyFile, out *os.File, off *int64, etag *string, buf []byte) error {
 	hdr := map[string]string{}
 	if *off > 0 {
 		hdr["Range"] = fmt.Sprintf("bytes=%d-", *off)
@@ -653,6 +685,7 @@ func (j *rcopyJob) fetch(f rcopyFile, out *os.File, off *int64, etag *string, ba
 			if err := out.Truncate(0); err != nil {
 				return err
 			}
+			j.t.done.Add(-*off)
 			*off = 0
 		}
 	case resp.StatusCode == http.StatusPartialContent && *off > 0:
@@ -681,7 +714,7 @@ func (j *rcopyJob) fetch(f rcopyFile, out *os.File, off *int64, etag *string, ba
 				return permErr{err} // disk full etc.: retrying does not help
 			}
 			*off += int64(n)
-			j.t.done.Store(base + *off)
+			j.t.done.Add(int64(n))
 		}
 		if rerr == io.EOF {
 			return nil
