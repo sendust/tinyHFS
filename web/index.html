@@ -200,6 +200,11 @@ button.thm:active{transform:scale(.9)}
       <option value="6">Zip: normal</option>
       <option value="9">Zip: best</option>
     </select>
+    <button id="bCp" disabled title="Copy the names of the selected items to the clipboard (Ctrl+C)">📋 Copy name</button>
+    <select id="cpMode" title="What Copy name copies">
+      <option value="full">Copy: full path</option>
+      <option value="name">Copy: name only</option>
+    </select>
     <span class="sp"></span>
     <form class="search" id="fSearch"><input type="search" id="q" placeholder="Search in this folder…" title="Searches this folder and all subfolders.&#10;Words separated by space must all match.&#10;Wildcards: *.mp4  report_??.pdf"><button title="Search">🔍</button></form>
     <button id="bRef" title="Refresh">⟳</button>
@@ -344,7 +349,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
     tb.appendChild(tr)}
   document.querySelectorAll('th[data-k]').forEach(th=>{const k=th.dataset.k;th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(S.sort.k===k?(S.sort.asc?' ▲':' ▼'):'')});
   updSel()}
-function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bDel').disabled=!n;$('#bDel').textContent=n?`🗑 Delete (${n})`:'🗑 Delete';$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
+function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#bCp').disabled=!n;$('#bCp').textContent=n>1?`📋 Copy names (${n})`:'📋 Copy name';$('#bDel').disabled=!n;$('#bDel').textContent=n?`🗑 Delete (${n})`:'🗑 Delete';$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
   $('#bZip').textContent=n?`🗜 Zip selected (${n})`:'🗜 Zip this folder';const all=$('#ckAll');const tot=S.entries.filter(e=>!e.denied).length;all.checked=n&&n===tot;all.indeterminate=n>0&&n<tot}
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};try{localStorage.setItem('tinyhfs.sort',JSON.stringify(S.sort))}catch{}renderList()});
 // restore the sort order chosen earlier (kept across F5 / restarts)
@@ -690,6 +695,26 @@ async function delSelected(){if(!S.auth||!S.sel.size)return;
   if(PV.open&&PV.root===S.root&&PV.list[PV.i]&&ents.some(e=>{const p=joinP(S.path,e.name);const c=PV.list[PV.i].p;return c===p||c.startsWith(p+'/')}))closePv();
   S.sel.clear();updSel();S.search?doSearch():load();loadRoots().catch(()=>{})}
 $('#bDel').onclick=delSelected;
+// ---- copy file names: full path on the server (e.g. /mnt/raid/a.mp4, D:\share\a.mp4) or name only
+async function copyText(t){
+  try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(t);return true}}catch{}
+  // plain http (not localhost): the async clipboard API is not available, use a hidden textarea
+  const ta=document.createElement('textarea');ta.value=t;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:-1000px;opacity:0';
+  document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy')}catch{}ta.remove();return ok}
+function fullPath(rel){const r=S.roots[S.root];const rp=r?r.path:'';const win=/^[A-Za-z]:|^\\\\/.test(rp)||rp.includes('\\');
+  if(!win)return (rp.replace(/\/+$/,'')+rel)||'/';return rp.replace(/\\+$/,'')+rel.replace(/\//g,'\\')}
+async function copyNames(mode){mode=mode||$('#cpMode').value;
+  const names=sorted().filter(e=>S.sel.has(e.name)&&!e.denied).map(e=>e.name);if(!names.length)return;
+  const lines=names.map(n=>mode==='name'?base(n):fullPath(joinP(S.path,n)));
+  if(await copyText(lines.join('\n')))toast(names.length>1?`Copied ${names.length} ${mode==='name'?'names':'paths'}`:'Copied: '+lines[0]);
+  else toast('Copy failed (clipboard not available)')}
+$('#bCp').onclick=()=>copyNames();
+try{const m=localStorage.getItem('tinyhfs.cpmode');if(m==='full'||m==='name')$('#cpMode').value=m}catch{}
+$('#cpMode').onchange=()=>{try{localStorage.setItem('tinyhfs.cpmode',$('#cpMode').value)}catch{}};
+// Ctrl+C with a selection and no selected text: copy names
+document.addEventListener('keydown',ev=>{if(!(ev.ctrlKey||ev.metaKey)||ev.altKey||ev.key.toLowerCase()!=='c'||!S.sel.size||PV.open)return;
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)||document.activeElement.isContentEditable||String(getSelection()))return;
+  ev.preventDefault();copyNames()});
 document.addEventListener('keydown',ev=>{if(ev.key==='Delete'&&S.auth&&S.sel.size&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)){ev.preventDefault();delSelected()}});
 $('#bDl').onclick=async()=>{const ents=S.entries.filter(e=>S.sel.has(e.name));
   for(const e of ents){const p=joinP(S.path,e.name);if(e.dir)downloadZip(S.root,p,[],base(e.name)+'.zip');else downloadFile(S.root,p,base(e.name),e.size);await sleep(400)}};
