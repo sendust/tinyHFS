@@ -163,6 +163,10 @@ body.split #xfer{right:var(--pw,50vw)}
 #pv.drag{user-select:none}
 tbody tr.pvcur td{background:var(--hl)}
 tbody tr.pvcur td.name{font-weight:600}
+#tbl{outline:none}
+tbody tr.cur td{box-shadow:inset 0 1px 0 var(--acc),inset 0 -1px 0 var(--acc)}
+tbody tr.cur td:first-child{box-shadow:inset 0 1px 0 var(--acc),inset 0 -1px 0 var(--acc),inset 2px 0 0 var(--acc)}
+#tbl:not(:focus-within) tbody tr.cur td{box-shadow:none}
 @media (max-width:760px){#pv{width:100vw!important}body.split{padding-right:0}body.split #xfer{right:0}}
 #bOut{display:none}
 .davlink{font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;color:var(--fg);text-decoration:none;white-space:nowrap}
@@ -212,7 +216,7 @@ button.thm:active{transform:scale(.9)}
   <div id="sinfo"></div>
   <input type="file" id="fUp" multiple hidden>
   <input type="file" id="fUpDir" webkitdirectory multiple hidden>
-  <table>
+  <table id="tbl" tabindex="0">
     <thead><tr>
       <th class="ck"><input type="checkbox" id="ckAll"></th>
       <th data-k="name">Name</th>
@@ -279,7 +283,7 @@ function renderIPs(ips,host){const el=$('#ips');el.innerHTML=(host?`🖥 <b clas
   for(const i of ips){const a=document.createElement('a');a.href=i.url;a.title=i.url;a.innerHTML=`${esc(i.ip)}<small>${esc(i.nic)}</small>`;el.appendChild(a)}}
 async function load(){
   const {root,path}=parseHash();
-  const changed=root!==S.root||path!==S.path;S.root=root;S.path=path;if(changed)S.sel.clear();
+  const changed=root!==S.root||path!==S.path;S.root=root;S.path=path;if(changed){S.sel.clear();S.cur=null}
   endSearch();watchDir();
   renderRoots();renderCrumbs();
   try{const d=await api(`/api/list?root=${root}&path=${encodeURIComponent(path)}`);S.entries=d.entries;S.xtok=d.xtok||'';renderFree(d.free,d.total,d.mount);
@@ -322,6 +326,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
   const nDen=list.filter(e=>e.denied).length;
   if(nDen){const tr=document.createElement('tr');tr.innerHTML=`<td colspan="5" class="warn">🔒 ${nDen} item(s) cannot be accessed (permission denied on the server). Folders need <b>r + x</b> permission for the user running tinyHFS — e.g. <code>sudo chmod -R a+rX &lt;folder&gt;</code></td>`;tb.appendChild(tr)}
   for(const e of list){const tr=document.createElement('tr');if(S.sel.has(e.name))tr.className='sel';tr.dataset.n=e.name;
+    tr.addEventListener('click',ev=>{S.cur=e.name;markCur(false);if(!ev.target.closest('input,a,button'))$('#tbl').focus({preventScroll:true})});
     if(e.denied){const bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);tr.className='denied';tr.title='Permission denied — cannot open, size and date unknown';
       tr.innerHTML=`<td class="ck"><input type="checkbox" disabled></td><td class="name"><span class="ico">🔒</span>${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}${e.dir?'/':''}</td><td class="num">—</td><td class="num">—</td><td class="act"></td>`;
       tr.onclick=()=>toast('Permission denied: '+bn);tb.appendChild(tr);continue}
@@ -347,6 +352,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
       ev.dataTransfer.setData(XT,JSON.stringify({v:1,origin:location.origin,alts:S.alts||[],host:HOST,root:S.root,dir:S.path,items,token:S.xtok||''}))});
     tr.addEventListener('dragend',()=>{dragOut=false});
     tb.appendChild(tr)}
+  markCur(false);
   document.querySelectorAll('th[data-k]').forEach(th=>{const k=th.dataset.k;th.textContent=th.textContent.replace(/ [▲▼]$/,'')+(S.sort.k===k?(S.sort.asc?' ▲':' ▼'):'')});
   updSel()}
 function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#cpSel').disabled=!n;$('#cpSel').options[0].textContent=n>1?`📋 Copy names (${n})`:'📋 Copy name';$('#bDel').disabled=!n;$('#bDel').textContent=n?`🗑 Delete (${n})`:'🗑 Delete';$('#bDl').textContent=n?`⬇ Download (${n})`:'⬇ Download';
@@ -354,6 +360,29 @@ function updSel(){const n=S.sel.size;$('#bDl').disabled=!n;$('#cpSel').disabled=
 document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;S.sort=S.sort.k===k?{k,asc:!S.sort.asc}:{k,asc:k==='name'};try{localStorage.setItem('tinyhfs.sort',JSON.stringify(S.sort))}catch{}renderList()});
 // restore the sort order chosen earlier (kept across F5 / restarts)
 try{const o=JSON.parse(localStorage.getItem('tinyhfs.sort')||'null');if(o&&['name','size','mtime'].includes(o.k)&&typeof o.asc==='boolean')S.sort={k:o.k,asc:o.asc}}catch{}
+// ---- keyboard in the file list: Up/Down (Shift = select while moving), Space = select/unselect,
+// Home/End/PageUp/PageDown, Enter = open, Ctrl+A = select all
+function curRows(){return [...document.querySelectorAll('#list tr[data-n]')]}
+function markCur(scroll){for(const t of document.querySelectorAll('#list tr.cur'))t.classList.remove('cur');
+  if(S.cur==null)return;const tr=curRows().find(t=>t.dataset.n===S.cur);if(!tr){S.cur=null;return}
+  tr.classList.add('cur');if(scroll)tr.scrollIntoView({block:'nearest'})}
+function selRow(tr,on){const ck=tr&&tr.querySelector('input[type=checkbox]:not(:disabled)');if(!ck||ck.checked===on)return;ck.checked=on;ck.dispatchEvent(new Event('change'))}
+document.addEventListener('keydown',ev=>{if(PV.open||ev.altKey||!S.entries.length)return;
+  const tbl=$('#tbl'),ae=document.activeElement;
+  if(!(tbl.contains(ae)||(ae===document.body&&S.cur!=null)))return;
+  const k=ev.key,rows=curRows();if(!rows.length)return;
+  if((ev.ctrlKey||ev.metaKey)&&k.toLowerCase()==='a'){ev.preventDefault();rows.forEach(t=>selRow(t,true));return}
+  if(ev.ctrlKey||ev.metaKey)return;
+  let i=rows.findIndex(t=>t.dataset.n===S.cur);
+  const step={ArrowDown:1,ArrowUp:-1,PageDown:10,PageUp:-10,Home:-1e9,End:1e9}[k];
+  if(step!==undefined){ev.preventDefault();if(ae!==tbl)tbl.focus({preventScroll:true});
+    const from=i,to=i<0?(step>0?0:rows.length-1):Math.max(0,Math.min(rows.length-1,i+step));
+    if(ev.shiftKey){if(from>=0)selRow(rows[from],true);const a=Math.min(Math.max(from,0),to),b=Math.max(from,to);for(let j=a;j<=b;j++)selRow(rows[j],true)}
+    S.cur=rows[to].dataset.n;markCur(true);return}
+  if(i<0)return;
+  if(k===' '){ev.preventDefault();if(ae!==tbl)tbl.focus({preventScroll:true}); // (focused checkbox would toggle again on keyup)
+    const ck=rows[i].querySelector('input[type=checkbox]');if(ck&&!ck.disabled)selRow(rows[i],!ck.checked);return}
+  if(k==='Enter'){const a=rows[i].querySelector('.name a');if(a){ev.preventDefault();a.click()}}});
 $('#ckAll').onchange=ev=>{S.sel=ev.target.checked?new Set(S.entries.filter(e=>!e.denied).map(e=>e.name)):new Set();renderList()};
 
 // ---------- transfers panel
