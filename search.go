@@ -204,6 +204,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sm := summary()
+		addLinkTokens(r, s.results, q.Get("root"), clean)
 		writeJSON(w, 200, map[string]any{
 			"path": clean, "q": query, "entries": s.results,
 			"truncated": sm["truncated"], "timedOut": sm["timedOut"],
@@ -224,6 +225,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		newer := append([]entry(nil), s.results[sent:]...)
 		s.mu.Unlock()
 		if len(newer) > 0 {
+			addLinkTokens(r, newer, q.Get("root"), clean)
 			if enc.Encode(map[string]any{"t": "r", "entries": newer}) != nil {
 				return false
 			}

@@ -345,7 +345,8 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
     tr.querySelector('.act button').onclick=()=>e.dir?downloadZip(S.root,p,[],bn+'.zip'):downloadFile(S.root,p,bn,e.size);
     // drag out => download (Chromium: DownloadURL)
     tr.draggable=true;
-    tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):dlURL(S.root,p));
+    // e.lt (servers with -auth): link token so a player (mpv, VLC) can open the file without the login cookie
+    tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):dlURL(S.root,p)+(e.lt?'?xt='+encodeURIComponent(e.lt):''));
       const fname=(e.dir?bn+'.zip':bn).replace(/:/g,'_');
       ev.dataTransfer.setData('DownloadURL',`${e.dir?'application/zip':'application/octet-stream'}:${fname}:${url}`);
       ev.dataTransfer.setData('text/uri-list',url);ev.dataTransfer.setData('text/plain',url);ev.dataTransfer.effectAllowed='copy';

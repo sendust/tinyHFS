@@ -51,6 +51,8 @@ type entry struct {
 	MTime int64  `json:"mtime"`
 	// Denied: the name is listed but the file cannot be accessed (e.g. folder without x permission)
 	Denied bool `json:"denied,omitempty"`
+	// LT: link token for opening the file in an external player without login (linktok.go)
+	LT string `json:"lt,omitempty"`
 }
 
 // warnDenied logs inaccessible paths, at most once per folder every 10 minutes
@@ -545,6 +547,7 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 	if denied > 0 {
 		warnDenied(full, denied, firstDenied, deniedErr)
 	}
+	addLinkTokens(r, list, q.Get("root"), clean)
 	free, total := diskUsage(full)
 	out := map[string]any{"path": clean, "free": free, "total": total, "mount": mountPoint(full), "entries": list}
 	if isAuthed(r) { // read-only token for server to server copy of this folder (rcopy.go), also without -auth (CORS relay)
@@ -998,7 +1001,7 @@ func logMW(next http.Handler) http.Handler {
 		if quiet {
 			return
 		}
-		uri := r.URL.RequestURI()
+		uri := maskLinkToken(r.URL.RequestURI())
 		if u, err := url.QueryUnescape(uri); err == nil {
 			uri = u
 		}
