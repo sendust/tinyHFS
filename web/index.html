@@ -14,6 +14,8 @@
 :root[data-theme="dark"]{--bg:#1e1e1e;--panel:#282828;--fg:#e5e7eb;--muted:#9aa3af;--line:#3c3c3c;--acc:#60a5fa;--hl:#1e2b40;--ok:#4ade80;--err:#f87171;--warn:#fbbf24;--live:#ffa94d;color-scheme:dark}
 :root[data-theme="pink"]{--bg:#fff0f6;--panel:#ffffff;--fg:#4a1d35;--muted:#a0607f;--line:#f8c8dc;--acc:#d6336c;--hl:#ffdeeb;--ok:#2b8a3e;--err:#c92a2a;--warn:#b45309;--live:#d9480f}
 :root[data-theme="cloudy"]{--bg:#acacae;--panel:#b3b3b3;--fg:#141820;--muted:#3f444d;--line:#9ea0a4;--acc:#1d4ed8;--hl:#a2a7b1;--ok:#166534;--err:#a61b1b;--warn:#7c3a0a;--live:#9a3412}
+:root[data-theme="brown"]{--bg:#2b2118;--panel:#3a2c20;--fg:#f1e6d6;--muted:#bfa58a;--line:#55412f;--acc:#b8742a;--hl:#4a3826;--ok:#8fd18a;--err:#ff8a7a;--warn:#f2c14e;--live:#ffb070;color-scheme:dark}
+:root[data-theme="yellow"]{--bg:#fffbe6;--panel:#ffffff;--fg:#3d3200;--muted:#8a7a3d;--line:#f0dc8c;--acc:#a16207;--hl:#fff3bf;--ok:#2b8a3e;--err:#c92a2a;--warn:#9a3412;--live:#d9480f}
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg)}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -829,9 +831,9 @@ window.addEventListener('beforeunload',ev=>{if(X.some(x=>x.active&&x.kind==='up'
 // ---------- start
 loadRoots().then(load).catch(e=>toast(e.message));
 
-// theme button (light -> cloudy -> dark -> pink), shared by all tinyHFS pages via localStorage
+// theme button (light -> yellow -> cloudy -> brown -> dark -> pink), shared by all tinyHFS pages via localStorage
 (()=>{const r=document.documentElement,b=document.getElementById('thm');if(!b)return;const mq=matchMedia('(prefers-color-scheme: dark)');
-  const T=['light','cloudy','dark','pink'],ICON={light:'☀️',cloudy:'☁️',dark:'🌙',pink:'🌸'},NAME={light:'Light',cloudy:'Cloudy',dark:'Dark',pink:'Pink'};
+  const T=['light','yellow','cloudy','brown','dark','pink'],ICON={light:'☀️',yellow:'🌼',cloudy:'☁️',brown:'☕',dark:'🌙',pink:'🌸'},NAME={light:'Light',yellow:'Yellow',cloudy:'Cloudy',brown:'Brown',dark:'Dark',pink:'Pink'};
   const eff=()=>T.includes(r.dataset.theme)?r.dataset.theme:(mq.matches?'dark':'light');
   const upd=()=>{const t=eff(),n=T[(T.indexOf(t)+1)%T.length];b.textContent=ICON[t];b.title=`Theme: ${NAME[t]} — click for ${NAME[n]}`};
   b.addEventListener('click',ev=>{ev.preventDefault();const n=T[(T.indexOf(eff())+1)%T.length];r.dataset.theme=n;try{localStorage.setItem('tinyhfs.theme',n)}catch{}upd()});
