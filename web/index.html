@@ -101,11 +101,13 @@ tbody tr.live td.name a::after{content:' ●';font-size:.8em;animation:blink 1.2
 tbody tr.denied td.name{font-style:italic}
 td.warn{background:color-mix(in srgb,var(--warn) 12%,var(--panel));color:var(--warn);font-size:12.5px;white-space:normal}
 /* image preview: right half of the window */
-#pv{position:fixed;top:0;right:0;bottom:0;width:var(--pw,50vw);background:var(--panel);border-left:1px solid var(--line);z-index:6;display:none;flex-direction:column}
+#pv{position:fixed;top:0;right:0;bottom:0;width:var(--pwe);background:var(--panel);border-left:1px solid var(--line);z-index:6;display:none;flex-direction:column}
 body.split #pv{display:flex}
-body.split{padding-right:var(--pw,50vw)}
+/* preview pane width: the user's (grip) width, but the list always keeps at least 300px */
+:root{--pwe:min(var(--pw,50vw),calc(100vw - 300px))}
+body.split{padding-right:var(--pwe)}
 body.split main{max-width:none}
-body.split #xfer{right:var(--pw,50vw)}
+body.split #xfer{right:var(--pwe)}
 #pv .ph{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);min-width:0}
 #pv .pt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 #pv .pt small{display:block;font-weight:400;color:var(--muted);font-size:12px}
@@ -169,7 +171,7 @@ tbody tr.pvcur td.name{font-weight:600}
 tbody tr.cur td{box-shadow:inset 0 1px 0 var(--acc),inset 0 -1px 0 var(--acc)}
 tbody tr.cur td:first-child{box-shadow:inset 0 1px 0 var(--acc),inset 0 -1px 0 var(--acc),inset 2px 0 0 var(--acc)}
 #tbl:not(:focus-within) tbody tr.cur td{box-shadow:none}
-@media (max-width:760px){#pv{width:100vw!important}body.split{padding-right:0}body.split #xfer{right:0}}
+@media (max-width:560px){#pv{width:100vw!important}body.split{padding-right:0}body.split #xfer{right:0}}
 #bOut{display:none}
 .davlink{font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:6px;color:var(--fg);text-decoration:none;white-space:nowrap}
 .davlink:hover{border-color:var(--acc)}
@@ -269,6 +271,8 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function encPath(p){return p.split('/').filter(Boolean).map(encodeURIComponent).join('/')}
 function joinP(a,b){return (a.endsWith('/')?a:a+'/')+b}
 function dlURL(root,p){return `/dl/${root}/${encPath(p)}`}
+// file link for drag-out / "Copy link address": with -auth it carries the file's link token (?xt=)
+function fileURL(e,p){return dlURL(S.root,p)+(e.lt?'?xt='+encodeURIComponent(e.lt):'')}
 function zipURL(root,p,names){let u=`/zip/${root}/${encPath(p)}?level=${$('#zlv').value}`;for(const n of names||[])u+='&n='+encodeURIComponent(n);return u}
 function rid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -334,7 +338,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
       tr.onclick=()=>toast('Permission denied: '+bn);tb.appendChild(tr);continue}
     const p=joinP(S.path,e.name),bn=base(e.name),dp=e.name.slice(0,e.name.length-bn.length);
     tr.innerHTML=`<td class="ck"><input type="checkbox" ${S.sel.has(e.name)?'checked':''}></td>
-      <td class="name"><span class="ico">${e.dir?'📁':({img:'🖼',video:'🎬',audio:'🎵',text:'📝',md:'📘',html:'🌐',pdf:'📕'}[pvKind(bn)]||'📄')}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):dlURL(S.root,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
+      <td class="name"><span class="ico">${e.dir?'📁':({img:'🖼',video:'🎬',audio:'🎵',text:'📝',md:'📘',html:'🌐',pdf:'📕'}[pvKind(bn)]||'📄')}</span><a href="${e.dir?'#/'+S.root+'/'+encPath(p):fileURL(e,p)}">${dp?`<span class="dirpart">${esc(dp)}</span>`:''}${esc(bn)}</a></td>
       <td class="num">${e.dir?'':fmtSize(e.size)}</td><td class="num">${fmtDate(e.mtime)}</td>
       <td class="act">${e.dir?'<button data-a="zip" title="Download folder as zip">🗜 zip</button>':'<button data-a="dl" title="Download">⬇</button>'}</td>`;
     if(!e.dir&&S.active.has(e.name)){tr.classList.add('live');tr.title='Being written (size or time changing)'}
@@ -346,7 +350,7 @@ function renderList(){const tb=$('#list');tb.innerHTML='';
     // drag out => download (Chromium: DownloadURL)
     tr.draggable=true;
     // e.lt (servers with -auth): link token so a player (mpv, VLC) can open the file without the login cookie
-    tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):dlURL(S.root,p)+(e.lt?'?xt='+encodeURIComponent(e.lt):''));
+    tr.addEventListener('dragstart',ev=>{dragOut=true;const url=location.origin+(e.dir?zipURL(S.root,S.path,[e.name]):fileURL(e,p));
       const fname=(e.dir?bn+'.zip':bn).replace(/:/g,'_');
       ev.dataTransfer.setData('DownloadURL',`${e.dir?'application/zip':'application/octet-stream'}:${fname}:${url}`);
       ev.dataTransfer.setData('text/uri-list',url);ev.dataTransfer.setData('text/plain',url);ev.dataTransfer.effectAllowed='copy';
